@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
+@theme {
+  --font-sans: 'Outfit', sans-serif;
+  --color-brand-red: #E53935;
+}
+
+@layer base {
+  body {
+    @apply bg-black text-white font-sans antialiased;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Reset default list styles that might not be reset */
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+}
