@@ -361,7 +361,10 @@ const Recepcion = () => {
         })
       });
 
-      if (!res.ok) throw new Error("Error al registrar cliente");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Error al registrar cliente");
+      }
       
       setNombreNuevo('');
       setCiNuevo('');

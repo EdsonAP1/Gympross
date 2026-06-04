@@ -244,17 +244,23 @@ def crear_cliente():
     # Calcular fecha de vencimiento a 30 días si está activa
     fecha_exp = (datetime.now() + timedelta(days=30)).isoformat() if estado == 'activa' else None
 
-    res = supabase_cliente.table('clientes').insert({
-        "id_gimnasio": id_gimnasio,
-        "nombre_completo": datos['nombre_completo'],
-        "documento_identidad": documento,
-        "pin_acceso": pin,
-        "estado_membresia": estado,
-        "url_foto_perfil": datos.get('url_foto_perfil', ''),
-        "fecha_vencimiento": fecha_exp
-    }).execute()
-    
-    return jsonify(res.data[0] if res.data else {}), 201
+    try:
+        res = supabase_cliente.table('clientes').insert({
+            "id_gimnasio": id_gimnasio,
+            "nombre_completo": datos['nombre_completo'],
+            "documento_identidad": documento,
+            "pin_acceso": pin,
+            "estado_membresia": estado,
+            "url_foto_perfil": datos.get('url_foto_perfil', ''),
+            "fecha_vencimiento": fecha_exp
+        }).execute()
+        
+        return jsonify(res.data[0] if res.data else {}), 201
+    except Exception as e:
+        mensaje_error = str(e)
+        if "duplicate key" in mensaje_error or "23505" in mensaje_error:
+            return jsonify({"error": "El documento de identidad o PIN ya está registrado para otro cliente en este gimnasio"}), 400
+        return jsonify({"error": f"Error al crear cliente en la base de datos: {mensaje_error}"}), 400
 
 
 @recepcion_bp.route('/clientes/registrar-pago', methods=['POST'])
