@@ -39,7 +39,7 @@ const Recepcion = () => {
   // Datos de la base de datos
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [asistenciasActivas, setAsistenciasActivas] = useState<Asistencia[]>([]);
-  const [asistenciasRecientes, setAsistenciasRecientes] = useState<any[]>([]);
+  const [_, setAsistenciasRecientes] = useState<any[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
 
   // Estados de Configuración y Asistencia de Personal
@@ -72,11 +72,6 @@ const Recepcion = () => {
   const [precioAnual, setPrecioAnual] = useState<number>(250);
   const [moneda, setMoneda] = useState<string>('USD');
 
-  const PLANES_PRECIOS = {
-    mensual: 30,
-    ejecutivo: 20,
-    anual: 250
-  };
 
   const obtenerToken = async () => {
     const { data: { session } } = await clienteSupabase.auth.getSession();

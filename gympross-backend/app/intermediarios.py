@@ -27,22 +27,23 @@ def requerir_autenticacion_y_suscripcion(f):
             return jsonify({"error": "Token de autorización faltante"}), 401
 
         try:
-            # Decodificar el token JWT usando el secreto de Supabase
-            # Si el secreto es el por defecto 'tu_jwt_secret_aqui', decodificamos sin verificar firma
-            # para facilitar el desarrollo local inicial.
-            verificar_firma = (JWT_SECRET != 'tu_jwt_secret_aqui' and JWT_SECRET != 'clave_super_secreta_desarrollo')
-            
-            if verificar_firma:
-                datos_token = jwt.decode(token, JWT_SECRET, algorithms=["HS256"], options={"verify_aud": False})
+            # Obtener el usuario autenticado directamente a través de Supabase Auth
+            # Esto evita problemas con el algoritmo de firma del JWT (ej. HS256 vs ES256)
+            if supabase_cliente:
+                try:
+                    res_usuario = supabase_cliente.auth.get_user(token)
+                    id_usuario = res_usuario.user.id
+                    correo_usuario = res_usuario.user.email
+                except Exception as auth_err:
+                    return jsonify({"error": f"Token inválido o expirado en Supabase Auth: {str(auth_err)}"}), 401
             else:
+                # Decodificación local sin firma si no está inicializado el cliente (solo desarrollo)
                 datos_token = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
-            
-            # El ID de usuario en Supabase Auth está en la clave 'sub'
-            id_usuario = datos_token.get('sub')
-            correo_usuario = datos_token.get('email')
+                id_usuario = datos_token.get('sub')
+                correo_usuario = datos_token.get('email')
             
             if not id_usuario:
-                return jsonify({"error": "El token es inválido o no contiene información del usuario"}), 401
+                return jsonify({"error": "El token no contiene información válida del usuario"}), 401
             
             # Si el usuario es el SuperAdmin, configuramos permisos directamente
             if correo_usuario == 'superadmin@gympross.com':

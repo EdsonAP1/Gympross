@@ -72,7 +72,7 @@ const Dueno = () => {
   // Estados de Configuración de Portal, Promociones, Tarifas y Moneda
   const [contrasenaDueno, setContrasenaDueno] = useState('password123');
   const [contrasenaRecepcion, setContrasenaRecepcion] = useState('password123');
-  const [promocionNombre, setPromocionNombre] = useState('');
+  const [_promocionNombre, setPromocionNombre] = useState('');
   const [promocionDescuento, setPromocionDescuento] = useState<number>(0);
   const [promoNombreBase, setPromoNombreBase] = useState('');
   const [promoActiva, setPromoActiva] = useState(false);
