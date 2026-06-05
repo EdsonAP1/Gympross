@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clienteSupabase } from '../supabaseClient';
+import { useToast } from '../contexto/ToastContext';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface Personal {
   id_usuario: string;
@@ -26,6 +29,7 @@ interface Cliente {
 
 const Dueno = () => {
   const navegar = useNavigate();
+  const { mostrarToast } = useToast();
   const [cargando, setCargando] = useState(true);
   const [primeraCarga, setPrimeraCarga] = useState(true);
   const [gimnasioId, setGimnasioId] = useState('');
@@ -63,7 +67,6 @@ const Dueno = () => {
   const [ciSocio, setCiSocio] = useState('');
   const [estadoMembresiaSocio, setEstadoMembresiaSocio] = useState<'activa' | 'vencida'>('vencida');
   const [fechaVencimientoSocio, setFechaVencimientoSocio] = useState('');
-  const [casilleroSocio, setCasilleroSocio] = useState<number | string>('');
   const [editandoSocioId, setEditandoSocioId] = useState<string | null>(null);
   const [guardandoSocio, setGuardandoSocio] = useState(false);
   const [mensajeSocioForm, setMensajeSocioForm] = useState({ tipo: '', texto: '' });
@@ -85,9 +88,21 @@ const Dueno = () => {
   const [guardandoPromocion, setGuardandoPromocion] = useState(false);
   const [guardandoTarifas, setGuardandoTarifas] = useState(false);
 
-  // Control de Pestañas y Edición
-  const [tabActiva, setTabActiva] = useState<'estadisticas' | 'personal' | 'socios' | 'configuracion'>('estadisticas');
+  // Estados para reporte de asistencias de personal
+  const [asistenciasPersonal, setAsistenciasPersonal] = useState<any[]>([]);
+  const [filtroEmpleadoAsistencia, setFiltroEmpleadoAsistencia] = useState<string>('todos');
+  const [fechaInicioAsistencia, setFechaInicioAsistencia] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30); // hace 30 días
+    return d.toISOString().split('T')[0];
+  });
+  const [fechaFinAsistencia, setFechaFinAsistencia] = useState<string>(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+
+  const [tabActiva, setTabActiva] = useState<'estadisticas' | 'personal' | 'socios' | 'configuracion' | 'asistencias'>('estadisticas');
   const [editandoPersonalId, setEditandoPersonalId] = useState<string | null>(null);
+  const [mostrandoModalSocio, setMostrandoModalSocio] = useState(false);
 
   const cargarDatos = async () => {
     try {
@@ -113,7 +128,7 @@ const Dueno = () => {
 
         if (errorUsuario) throw errorUsuario;
         if (!usuarioInfo) {
-          alert("Perfil de dueño no encontrado.");
+          mostrarToast("Perfil de dueño no encontrado.", "error");
           navegar('/login');
           return;
         }
@@ -181,6 +196,18 @@ const Dueno = () => {
 
       if (errorPers) throw errorPers;
       setPersonal(datosPersonal || []);
+
+      // 3.5. Obtener asistencias del personal
+      const { data: asistenciasPers, error: errorAsisPers } = await clienteSupabase
+        .from('asistencias')
+        .select('*')
+        .eq('id_gimnasio', idGimnasio)
+        .eq('tipo_persona', 'personal')
+        .order('fecha_entrada', { ascending: false });
+
+      if (!errorAsisPers && asistenciasPers) {
+        setAsistenciasPersonal(asistenciasPers);
+      }
 
       // 4. Obtener socios del gimnasio (lista y conteo)
       const { data: todosSocios, count: conteoClientes, error: errorClientes } = await clienteSupabase
@@ -338,9 +365,9 @@ const Dueno = () => {
         .eq('id_gimnasio', gimnasioId);
 
       if (error) throw error;
-      alert("Nombre del gimnasio actualizado con éxito.");
+      mostrarToast("Nombre del gimnasio actualizado con éxito.", "exito");
     } catch (err: any) {
-      alert("Error al actualizar: " + err.message);
+      mostrarToast("Error al actualizar: " + err.message, "error");
     } finally {
       setGuardandoGimnasio(false);
     }
@@ -359,9 +386,9 @@ const Dueno = () => {
         .eq('id_gimnasio', gimnasioId);
 
       if (error) throw error;
-      alert("Contraseñas del portal actualizadas con éxito.");
+      mostrarToast("Contraseñas del portal actualizadas con éxito.", "exito");
     } catch (err: any) {
-      alert("Error al actualizar contraseñas: " + err.message);
+      mostrarToast("Error al actualizar contraseñas: " + err.message, "error");
     } finally {
       setGuardandoContrasenas(false);
     }
@@ -397,10 +424,10 @@ const Dueno = () => {
       } else {
         // Eliminar fallback de localStorage si la base de datos ya fue actualizada
         localStorage.removeItem(`gym_tarifas_${gimnasioId}`);
-        alert("Tarifas y moneda actualizadas en la base de datos con éxito.");
+        mostrarToast("Tarifas y moneda actualizadas en la base de datos con éxito.", "exito");
       }
     } catch (err: any) {
-      alert("Error al actualizar tarifas: " + err.message);
+      mostrarToast("Error al actualizar tarifas: " + err.message, "error");
     } finally {
       setGuardandoTarifas(false);
     }
@@ -422,9 +449,9 @@ const Dueno = () => {
 
       if (error) throw error;
       setPromocionNombre(finalPromoNombre);
-      alert("Promoción del gimnasio actualizada con éxito.");
+      mostrarToast("Promoción del gimnasio actualizada con éxito.", "exito");
     } catch (err: any) {
-      alert("Error al actualizar promoción: " + err.message);
+      mostrarToast("Error al actualizar promoción: " + err.message, "error");
     } finally {
       setGuardandoPromocion(false);
     }
@@ -488,17 +515,26 @@ const Dueno = () => {
   };
 
   const eliminarPersonal = async (idUsuario: string, nombre: string) => {
-    if (confirm(`¿Estás seguro de que deseas eliminar a "${nombre}" del personal?`)) {
+    if (confirm(`¿Estás seguro de que deseas eliminar a "${nombre}" del personal? Esto también borrará todos sus registros de asistencia de manera permanente.`)) {
       try {
+        // Eliminar registros de asistencia del empleado primero
+        const { error: errorAsistencias } = await clienteSupabase
+          .from('asistencias')
+          .delete()
+          .eq('id_referencia', idUsuario);
+
+        if (errorAsistencias) throw errorAsistencias;
+
         const { error } = await clienteSupabase
           .from('usuarios_personal')
           .delete()
           .eq('id_usuario', idUsuario);
 
         if (error) throw error;
+        mostrarToast("Personal eliminado con éxito.", "exito");
         cargarDatos();
       } catch (err: any) {
-        alert("Error al eliminar personal: " + err.message);
+        mostrarToast("Error al eliminar personal: " + err.message, "error");
       }
     }
   };
@@ -528,7 +564,6 @@ const Dueno = () => {
             pin_acceso: pinCalculado,
             estado_membresia: estadoMembresiaSocio,
             url_foto_perfil: null,
-            casillero_asignado: casilleroSocio !== '' ? parseInt(casilleroSocio.toString()) : null,
             fecha_vencimiento: fechaVencimientoSocio !== '' ? new Date(fechaVencimientoSocio).toISOString() : null
           })
           .eq('id_cliente', editandoSocioId);
@@ -550,19 +585,21 @@ const Dueno = () => {
             pin_acceso: pinCalculado,
             estado_membresia: estadoMembresiaSocio,
             url_foto_perfil: null,
-            casillero_asignado: casilleroSocio !== '' ? parseInt(casilleroSocio.toString()) : null,
             fecha_vencimiento: fechaVencimientoSocio !== '' ? new Date(fechaVencimientoSocio).toISOString() : null
           });
 
         if (errorSocio) throw errorSocio;
-        setMensajeSocioForm({ tipo: 'exito', texto: 'Socio registrado correctamente.' });
       }
+
+      const mensajeExito = editandoSocioId ? 'Datos del socio actualizados correctamente.' : 'Socio registrado correctamente.';
+      mostrarToast(mensajeExito, 'exito');
 
       setNombreSocio('');
       setCiSocio('');
       setEstadoMembresiaSocio('vencida');
       setFechaVencimientoSocio('');
-      setCasilleroSocio('');
+      setEditandoSocioId(null);
+      setMostrandoModalSocio(false);
       
       cargarDatos();
     } catch (err: any) {
@@ -581,9 +618,10 @@ const Dueno = () => {
           .eq('id_cliente', idCliente);
 
         if (error) throw error;
+        mostrarToast("Socio eliminado con éxito.", "exito");
         cargarDatos();
       } catch (err: any) {
-        alert("Error al eliminar socio: " + err.message);
+        mostrarToast("Error al eliminar socio: " + err.message, "error");
       }
     }
   };
@@ -598,8 +636,8 @@ const Dueno = () => {
     } else {
       setFechaVencimientoSocio('');
     }
-    setCasilleroSocio(socio.casillero_asignado !== null && socio.casillero_asignado !== undefined ? socio.casillero_asignado : '');
     setMensajeSocioForm({ tipo: '', texto: '' });
+    setMostrandoModalSocio(true);
   };
 
   const cancelarEdicionSocio = () => {
@@ -608,8 +646,207 @@ const Dueno = () => {
     setCiSocio('');
     setEstadoMembresiaSocio('vencida');
     setFechaVencimientoSocio('');
-    setCasilleroSocio('');
     setMensajeSocioForm({ tipo: '', texto: '' });
+    setMostrandoModalSocio(false);
+  };
+
+  const calcularDuracion = (entrada: string, salida: string | null) => {
+    if (!salida) return 'Activo (En turno)';
+    const ms = new Date(salida).getTime() - new Date(entrada).getTime();
+    if (ms < 0) return '-';
+    const totalMinutos = Math.floor(ms / 60000);
+    const horas = Math.floor(totalMinutos / 60);
+    const minutos = totalMinutos % 60;
+    return `${horas}h ${minutos}m`;
+  };
+
+  const asistenciasFiltradas = asistenciasPersonal.filter(asis => {
+    const fechaAsis = asis.fecha_entrada.split('T')[0];
+    const cumpleFecha = fechaAsis >= fechaInicioAsistencia && fechaAsis <= fechaFinAsistencia;
+    const cumpleEmpleado = filtroEmpleadoAsistencia === 'todos' || asis.id_referencia === filtroEmpleadoAsistencia;
+    return cumpleFecha && cumpleEmpleado;
+  });
+
+  const exportarAPDF = () => {
+    const doc = new jsPDF();
+    
+    // Header styling
+    doc.setTextColor(18, 18, 18);
+    doc.setFontSize(24);
+    doc.setFont("helvetica", "bold");
+    doc.text("GYMPROSS CENTRAL", 15, 23);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(220, 38, 38); // Brand Red
+    doc.text("REPORTE DE ASISTENCIA DE PERSONAL", 15, 30);
+    
+    // Line separator
+    doc.setDrawColor(220, 38, 38);
+    doc.setLineWidth(0.5);
+    doc.line(15, 33, 195, 33);
+    
+    // Metadata columns
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "normal");
+    
+    // Column 1
+    doc.text(`Gimnasio: ${nombreGimnasio.toUpperCase()}`, 15, 40);
+    const empFiltrado = personal.find(p => p.id_usuario === filtroEmpleadoAsistencia);
+    doc.text(`Filtro Empleado: ${empFiltrado ? empFiltrado.nombre_completo : 'Todos los empleados'}`, 15, 45);
+    
+    // Column 2
+    doc.text(`Rango de Fechas: ${fechaInicioAsistencia} al ${fechaFinAsistencia}`, 115, 40);
+    doc.text(`Fecha Emisión: ${new Date().toLocaleDateString()}`, 115, 45);
+    
+    // Calculations for KPI Cards
+    const totalHoras = asistenciasFiltradas.reduce((sum, asis) => {
+      if (!asis.fecha_salida) return sum;
+      const ms = new Date(asis.fecha_salida).getTime() - new Date(asis.fecha_entrada).getTime();
+      return sum + (ms > 0 ? ms / 3600000 : 0);
+    }, 0);
+    
+    const turnosCompletados = asistenciasFiltradas.filter(a => a.fecha_salida).length;
+    const empleadosUnicos = new Set(asistenciasFiltradas.map(a => a.id_referencia)).size;
+    const promedioHoras = turnosCompletados > 0 ? totalHoras / turnosCompletados : 0;
+    
+    // KPI Cards rendering function
+    const drawCard = (x: number, y: number, w: number, h: number, label: string, val: string) => {
+      doc.setFillColor(248, 249, 250); // #F8F9FA
+      doc.setDrawColor(233, 236, 239); // #E9ECEF
+      doc.setLineWidth(0.3);
+      doc.roundedRect(x, y, w, h, 3, 3, 'FD');
+      
+      doc.setTextColor(108, 117, 125);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "normal");
+      doc.text(label, x + 4, y + 7);
+      
+      doc.setTextColor(18, 18, 18);
+      doc.setFontSize(10.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(val, x + 4, y + 16);
+    };
+
+    // Draw 4 cards
+    drawCard(15, 52, 41, 22, "Horas Totales", `${totalHoras.toFixed(1)} hrs`);
+    drawCard(60, 52, 41, 22, "Jornadas", `${asistenciasFiltradas.length}`);
+    drawCard(105, 52, 41, 22, "Promedio/Turno", `${promedioHoras.toFixed(1)} hrs`);
+    drawCard(150, 52, 45, 22, "Personal Activo", `${empleadosUnicos}`);
+    
+    let currentY = 82;
+    
+    // Group records by employee
+    const asistenciasPorEmpleado: { [id_usuario: string]: any[] } = {};
+    asistenciasFiltradas.forEach(asis => {
+      if (!asistenciasPorEmpleado[asis.id_referencia]) {
+        asistenciasPorEmpleado[asis.id_referencia] = [];
+      }
+      asistenciasPorEmpleado[asis.id_referencia].push(asis);
+    });
+    
+    const keys = Object.keys(asistenciasPorEmpleado);
+    
+    if (keys.length === 0) {
+      doc.setTextColor(150, 150, 150);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text("No se encontraron registros de asistencia.", 15, currentY);
+    } else {
+      keys.forEach((idUsuario, index) => {
+        const emp = personal.find(p => p.id_usuario === idUsuario);
+        const nombre = emp ? emp.nombre_completo : 'Empleado Eliminado';
+        const rol = emp ? emp.rol_usuario.toUpperCase() : '-';
+        
+        const logs = asistenciasPorEmpleado[idUsuario];
+        const subtotal = logs.reduce((sum, asis) => {
+          if (!asis.fecha_salida) return sum;
+          const ms = new Date(asis.fecha_salida).getTime() - new Date(asis.fecha_entrada).getTime();
+          return sum + (ms > 0 ? ms / 3600000 : 0);
+        }, 0);
+        
+        // Page break safety check
+        if (currentY > 230) {
+          doc.addPage();
+          currentY = 20;
+        } else if (index > 0) {
+          currentY += 10;
+        }
+        
+        // Employee ribbon banner
+        doc.setFillColor(243, 244, 246); // gray-100
+        doc.rect(15, currentY, 180, 8, 'F');
+        
+        doc.setTextColor(17, 24, 39); // gray-900
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.text(`${nombre} (${rol})`, 18, currentY + 5.5);
+        
+        doc.setTextColor(220, 38, 38); // brand-red
+        doc.text(`Total: ${subtotal.toFixed(1)} hrs`, 160, currentY + 5.5);
+        
+        currentY += 11;
+        
+        const cabeceras = [["Fecha", "Hora Entrada", "Hora Salida", "Duración", "Estado"]];
+        const filas = logs.map(asis => {
+          const fecha = new Date(asis.fecha_entrada).toLocaleDateString();
+          const entrada = new Date(asis.fecha_entrada).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const salida = asis.fecha_salida 
+            ? new Date(asis.fecha_salida).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : '-';
+          const duracion = calcularDuracion(asis.fecha_entrada, asis.fecha_salida);
+          const estado = !asis.fecha_salida ? 'En Turno' : 'Completado';
+          
+          return [fecha, entrada, salida, duracion, estado];
+        });
+        
+        autoTable(doc, {
+          startY: currentY,
+          head: cabeceras,
+          body: filas,
+          headStyles: {
+            fillColor: [17, 24, 39], // gray-900
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            halign: 'center'
+          },
+          columnStyles: {
+            0: { halign: 'center' },
+            1: { halign: 'center' },
+            2: { halign: 'center' },
+            3: { halign: 'center', fontStyle: 'bold', textColor: [220, 38, 38] },
+            4: { halign: 'center' }
+          },
+          styles: {
+            fontSize: 8.5,
+            cellPadding: 2.5
+          },
+          alternateRowStyles: {
+            fillColor: [249, 250, 251] // gray-50
+          },
+          didParseCell: (data) => {
+            if (data.column.index === 4 && data.cell.section === 'body') {
+              const text = data.cell.text[0];
+              if (text === 'En Turno') {
+                data.cell.styles.textColor = [46, 125, 50]; // Green
+                data.cell.styles.fillColor = [232, 245, 233]; // Light Green
+                data.cell.styles.fontStyle = 'bold';
+              } else {
+                data.cell.styles.textColor = [107, 114, 128]; // gray-500
+                data.cell.styles.fillColor = [243, 244, 246]; // gray-100
+              }
+            }
+          }
+        });
+        
+        currentY = (doc as any).lastAutoTable.finalY;
+      });
+    }
+    
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
   };
 
   return (
@@ -696,6 +933,16 @@ const Dueno = () => {
                 }`}
               >
                 Tarifas y Ajustes
+              </button>
+              <button
+                onClick={() => setTabActiva('asistencias')}
+                className={`px-6 py-3 rounded-t-2xl font-bold text-xs uppercase tracking-wider transition-all duration-300 cursor-pointer ${
+                  tabActiva === 'asistencias'
+                    ? 'bg-brand-red text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                Reportes Asistencia
               </button>
             </div>
             
@@ -1007,7 +1254,7 @@ const Dueno = () => {
                     <p className="text-gray-400 text-center py-12 font-semibold">No hay personal registrado.</p>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full border-collapse text-left text-sm">
+                      <table className="w-full min-w-[700px] border-collapse text-left text-sm">
                         <thead>
                           <tr className="border-b border-white/10 text-gray-400 uppercase tracking-wider text-xs">
                             <th className="pb-4">Nombre</th>
@@ -1019,7 +1266,11 @@ const Dueno = () => {
                         <tbody className="divide-y divide-white/5 text-gray-200">
                           {personal.map((p) => (
                             <tr key={p.id_usuario} className="hover:bg-white/5 transition-colors">
-                              <td className="py-4 font-bold text-white">{p.nombre_completo}</td>
+                              <td className="py-4 font-bold text-white">
+                                <span className="block truncate max-w-[200px]" title={p.nombre_completo}>
+                                  {p.nombre_completo}
+                                </span>
+                              </td>
                               <td className="py-4">
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
                                   p.rol_usuario === 'dueno'
@@ -1072,115 +1323,30 @@ const Dueno = () => {
             )}
 
             {tabActiva === 'socios' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 text-left">
-                {/* Columna Izquierda - Registro/Edición de Socio */}
-                <div className="lg:col-span-1 space-y-8">
-                  <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl">
-                    <h2 className="text-xl font-bold mb-4 text-left border-b border-white/5 pb-2 uppercase tracking-wide text-brand-red text-sm">
-                      {editandoSocioId ? 'Editar Socio' : 'Registrar Socio'}
-                    </h2>
-                    
-                    {mensajeSocioForm.texto && (
-                      <div className={`p-3 rounded-xl text-xs mb-4 text-center border ${
-                        mensajeSocioForm.tipo === 'exito' 
-                          ? 'bg-green-500/10 border-green-500/20 text-green-400' 
-                          : 'bg-brand-red/10 border-brand-red/20 text-brand-red'
-                      }`}>
-                        {mensajeSocioForm.texto}
-                      </div>
-                    )}
-
-                    <form onSubmit={registrarSocio} className="space-y-4">
-                      <div>
-                        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Nombre Completo</label>
-                        <input
-                          type="text"
-                          value={nombreSocio}
-                          onChange={(e) => setNombreSocio(e.target.value)}
-                          required
-                          className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300"
-                          placeholder="Ej. Mario Gomez"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Documento de Identidad (C.I.)</label>
-                        <input
-                          type="text"
-                          value={ciSocio}
-                          onChange={(e) => setCiSocio(e.target.value.replace(/\D/g, ''))}
-                          required
-                          className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300"
-                          placeholder="Ej. 1029384"
-                        />
-                        {ciSocio.length >= 6 && (
-                          <span className="text-[10px] text-gray-400 mt-1 block">
-                            PIN de Acceso Sugerido: <strong className="text-brand-red">{ciSocio.substring(0, 6)}</strong>
-                          </span>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Casillero Asignado (Opcional)</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={casilleroSocio}
-                          onChange={(e) => setCasilleroSocio(e.target.value === '' ? '' : parseInt(e.target.value) || '')}
-                          className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300"
-                          placeholder="Ej. 15"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Estado de Membresía</label>
-                        <select
-                          value={estadoMembresiaSocio}
-                          onChange={(e) => setEstadoMembresiaSocio(e.target.value as 'activa' | 'vencida')}
-                          className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300 cursor-pointer"
-                        >
-                          <option value="vencida" className="bg-black">Vencida</option>
-                          <option value="activa" className="bg-black">Activa</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Fecha de Vencimiento (Opcional)</label>
-                        <input
-                          type="date"
-                          value={fechaVencimientoSocio}
-                          onChange={(e) => setFechaVencimientoSocio(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300 cursor-pointer [color-scheme:dark]"
-                        />
-                      </div>
-
-
-                      <div className="flex gap-3">
-                        {editandoSocioId && (
-                          <button
-                            type="button"
-                            onClick={cancelarEdicionSocio}
-                            className="flex-1 border border-white/20 hover:border-brand-red text-white py-2.5 rounded-xl text-xs font-bold transition duration-300 cursor-pointer text-center"
-                          >
-                            Cancelar
-                          </button>
-                        )}
-                        <button
-                          type="submit"
-                          disabled={guardandoSocio}
-                          className="flex-grow bg-brand-red hover:bg-brand-red/90 disabled:bg-brand-red/50 text-white py-2.5 rounded-xl font-bold transition-all duration-300 shadow-[0_0_15px_rgba(229,57,53,0.3)] cursor-pointer text-center text-xs uppercase tracking-wider"
-                        >
-                          {guardandoSocio ? 'Procesando...' : editandoSocioId ? 'Guardar Cambios' : 'Registrar Socio'}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-
-                {/* Columna Derecha - Listado y Búsqueda de Socios */}
-                <div className="lg:col-span-2 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
+              <div className="w-full text-left">
+                {/* Listado y Búsqueda de Socios */}
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-3">
-                    <h2 className="text-2xl font-bold">Listado de Socios</h2>
+                    <div className="flex items-center gap-4">
+                      <h2 className="text-2xl font-bold">Listado de Socios</h2>
+                      <button
+                        onClick={() => {
+                          setEditandoSocioId(null);
+                          setNombreSocio('');
+                          setCiSocio('');
+                          setEstadoMembresiaSocio('vencida');
+                          setFechaVencimientoSocio('');
+                          setMensajeSocioForm({ tipo: '', texto: '' });
+                          setMostrandoModalSocio(true);
+                        }}
+                        className="bg-brand-red hover:bg-brand-red/90 text-white font-bold px-4 py-2 rounded-xl text-xs transition duration-300 cursor-pointer text-center uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_15px_rgba(229,57,53,0.2)]"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Registrar Socio
+                      </button>
+                    </div>
                     {/* Barra de Búsqueda */}
                     <div className="relative w-full md:w-72">
                       <input
@@ -1214,13 +1380,12 @@ const Dueno = () => {
 
                     return (
                       <div className="overflow-x-auto">
-                        <table className="w-full border-collapse text-left text-sm">
+                        <table className="w-full min-w-[900px] border-collapse text-left text-sm">
                           <thead>
                             <tr className="border-b border-white/10 text-gray-400 uppercase tracking-wider text-xs">
                               <th className="pb-4">Socio</th>
                               <th className="pb-4">C.I.</th>
                               <th className="pb-4">PIN Acceso</th>
-                              <th className="pb-4">Casillero</th>
                               <th className="pb-4">Membresía</th>
                               <th className="pb-4">Vence</th>
                               <th className="pb-4 text-right">Acciones</th>
@@ -1234,20 +1399,11 @@ const Dueno = () => {
                                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-red/40 to-brand-red/10 border border-brand-red/20 flex items-center justify-center font-bold text-brand-red text-xs">
                                       {socio.nombre_completo.substring(0, 2).toUpperCase()}
                                     </div>
-                                    <span className="font-bold text-white block truncate max-w-[150px] md:max-w-none">{socio.nombre_completo}</span>
+                                    <span className="font-bold text-white block truncate max-w-[150px] lg:max-w-[220px]" title={socio.nombre_completo}>{socio.nombre_completo}</span>
                                   </div>
                                 </td>
                                 <td className="py-4 font-mono text-xs text-gray-300">{socio.documento_identidad}</td>
                                 <td className="py-4 font-mono text-xs text-brand-red font-semibold">{socio.pin_acceso}</td>
-                                <td className="py-4 text-xs font-semibold">
-                                  {socio.casillero_asignado !== null && socio.casillero_asignado !== undefined ? (
-                                    <span className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-300 font-mono">
-                                      #{socio.casillero_asignado}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-500 italic">Ninguno</span>
-                                  )}
-                                </td>
                                 <td className="py-4">
                                   <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                                     socio.estado_membresia === 'activa'
@@ -1290,6 +1446,106 @@ const Dueno = () => {
                     );
                   })()}
                 </div>
+
+                {/* MODAL PARA REGISTRO/EDICIÓN DE SOCIO */}
+                {mostrandoModalSocio && (
+                  <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex justify-center items-center p-4">
+                    <div className="bg-[#121212] border border-white/10 rounded-3xl max-w-md w-full p-6 md:p-8 relative shadow-2xl animate-fadeIn">
+                      <button
+                        onClick={cancelarEdicionSocio}
+                        className="absolute top-4 right-4 text-gray-400 hover:text-white transition duration-200 cursor-pointer"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+
+                      <h2 className="text-xl font-bold mb-4 text-left border-b border-white/5 pb-2 uppercase tracking-wide text-brand-red text-sm">
+                        {editandoSocioId ? 'Editar Socio' : 'Registrar Socio'}
+                      </h2>
+                      
+                      {mensajeSocioForm.texto && (
+                        <div className={`p-3 rounded-xl text-xs mb-4 text-center border ${
+                          mensajeSocioForm.tipo === 'exito' 
+                            ? 'bg-green-500/10 border-green-500/20 text-green-400' 
+                            : 'bg-brand-red/10 border-brand-red/20 text-brand-red'
+                        }`}>
+                          {mensajeSocioForm.texto}
+                        </div>
+                      )}
+
+                      <form onSubmit={registrarSocio} className="space-y-4 text-left">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Nombre Completo</label>
+                          <input
+                            type="text"
+                            value={nombreSocio}
+                            onChange={(e) => setNombreSocio(e.target.value)}
+                            required
+                            className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300"
+                            placeholder="Ej. Mario Gomez"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Documento de Identidad (C.I.)</label>
+                          <input
+                            type="text"
+                            value={ciSocio}
+                            onChange={(e) => setCiSocio(e.target.value.replace(/\D/g, ''))}
+                            required
+                            className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300"
+                            placeholder="Ej. 1029384"
+                          />
+                          {ciSocio.length >= 6 && (
+                            <span className="text-[10px] text-gray-400 mt-1 block">
+                              PIN de Acceso Sugerido: <strong className="text-brand-red">{ciSocio.substring(0, 6)}</strong>
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Estado de Membresía</label>
+                          <select
+                            value={estadoMembresiaSocio}
+                            onChange={(e) => setEstadoMembresiaSocio(e.target.value as 'activa' | 'vencida')}
+                            className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300 cursor-pointer"
+                          >
+                            <option value="vencida" className="bg-black">Vencida</option>
+                            <option value="activa" className="bg-black">Activa</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Fecha de Vencimiento (Opcional)</label>
+                          <input
+                            type="date"
+                            value={fechaVencimientoSocio}
+                            onChange={(e) => setFechaVencimientoSocio(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300 cursor-pointer [color-scheme:dark]"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 pt-2">
+                          <button
+                            type="button"
+                            onClick={cancelarEdicionSocio}
+                            className="border border-white/20 hover:border-brand-red text-white py-2.5 rounded-xl text-xs font-bold transition duration-300 cursor-pointer text-center"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={guardandoSocio}
+                            className="bg-brand-red hover:bg-brand-red/90 disabled:bg-brand-red/50 text-white py-2.5 rounded-xl font-bold transition-all duration-300 shadow-[0_0_15px_rgba(229,57,53,0.3)] cursor-pointer text-center text-xs uppercase tracking-wider"
+                          >
+                            {guardandoSocio ? 'Guardando...' : editandoSocioId ? 'Guardar' : 'Registrar'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1523,6 +1779,138 @@ const Dueno = () => {
                         </button>
                       </form>
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {tabActiva === 'asistencias' && (
+              <div className="space-y-6 text-left animate-fadeIn">
+                {/* Panel de Filtros */}
+                <div className="bg-white/5 border border-white/10 rounded-3xl p-6 shadow-xl">
+                  <h2 className="text-xl font-bold mb-4 border-b border-white/5 pb-2 uppercase tracking-wide text-brand-red text-sm">Filtros de Reporte de Asistencia</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Empleado</label>
+                      <select
+                        value={filtroEmpleadoAsistencia}
+                        onChange={(e) => setFiltroEmpleadoAsistencia(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none transition-all duration-300"
+                      >
+                        <option value="todos" className="bg-black text-white">Todos los empleados</option>
+                        {personal.map(p => (
+                          <option key={p.id_usuario} value={p.id_usuario} className="bg-black text-white">
+                            {p.nombre_completo} ({p.rol_usuario})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Fecha Inicio</label>
+                      <input
+                        type="date"
+                        value={fechaInicioAsistencia}
+                        onChange={(e) => setFechaInicioAsistencia(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none transition-all duration-300"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Fecha Fin</label>
+                      <input
+                        type="date"
+                        value={fechaFinAsistencia}
+                        onChange={(e) => setFechaFinAsistencia(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none transition-all duration-300"
+                      />
+                    </div>
+
+                    <div>
+                      <button
+                        onClick={exportarAPDF}
+                        disabled={asistenciasFiltradas.length === 0}
+                        className="w-full bg-brand-red hover:bg-brand-red/90 disabled:bg-brand-red/20 disabled:text-gray-500 text-white py-2.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer text-center uppercase tracking-wider flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Exportar Reporte a PDF
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tabla de Resultados */}
+                <div className="bg-white/5 border border-white/10 rounded-3xl p-6 shadow-xl overflow-hidden">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                    <h2 className="text-xl font-bold border-b border-white/5 pb-2 uppercase tracking-wide text-brand-red text-sm">Registros de Asistencia ({asistenciasFiltradas.length})</h2>
+                    <span className="text-xs text-gray-400 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+                      Total Horas Estimadas: {asistenciasFiltradas.reduce((sum, asis) => {
+                        if (!asis.fecha_salida) return sum;
+                        const ms = new Date(asis.fecha_salida).getTime() - new Date(asis.fecha_entrada).getTime();
+                        return sum + (ms > 0 ? ms / 3600000 : 0);
+                      }, 0).toFixed(1)} hrs
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/10 text-gray-400 uppercase text-[10px] font-bold tracking-wider">
+                          <th className="py-3 px-4">Empleado</th>
+                          <th className="py-3 px-4">Rol</th>
+                          <th className="py-3 px-4">Fecha</th>
+                          <th className="py-3 px-4">Entrada</th>
+                          <th className="py-3 px-4">Salida</th>
+                          <th className="py-3 px-4">Duración</th>
+                          <th className="py-3 px-4">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 text-xs text-gray-300">
+                        {asistenciasFiltradas.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-gray-500 font-semibold">
+                              No se encontraron registros de asistencia para los filtros seleccionados.
+                            </td>
+                          </tr>
+                        ) : (
+                          asistenciasFiltradas.map((asis) => {
+                            const emp = personal.find(p => p.id_usuario === asis.id_referencia);
+                            const nombre = emp ? emp.nombre_completo : 'Empleado Eliminado';
+                            const rol = emp ? emp.rol_usuario : '-';
+                            const fecha = new Date(asis.fecha_entrada).toLocaleDateString();
+                            const entrada = new Date(asis.fecha_entrada).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            const salida = asis.fecha_salida 
+                              ? new Date(asis.fecha_salida).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : '-';
+                            const duracion = calcularDuracion(asis.fecha_entrada, asis.fecha_salida);
+                            const estaAdentro = !asis.fecha_salida;
+
+                            return (
+                              <tr key={asis.id_asistencia} className="hover:bg-white/5 transition-all">
+                                <td className="py-3.5 px-4 font-bold text-white">{nombre}</td>
+                                <td className="py-3.5 px-4 capitalize font-semibold text-gray-400">{rol}</td>
+                                <td className="py-3.5 px-4">{fecha}</td>
+                                <td className="py-3.5 px-4">{entrada}</td>
+                                <td className="py-3.5 px-4">{salida}</td>
+                                <td className="py-3.5 px-4 font-mono font-bold text-brand-red">{duracion}</td>
+                                <td className="py-3.5 px-4">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    estaAdentro 
+                                      ? 'bg-green-500/15 border-green-500/30 text-green-400' 
+                                      : 'bg-white/5 border-white/10 text-gray-400'
+                                  }`}>
+                                    {estaAdentro ? 'En Turno' : 'Completado'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
 import { clienteSupabase } from '../supabaseClient';
+import { useToast } from '../contexto/ToastContext';
 
 const urlSupabase = import.meta.env.VITE_SUPABASE_URL || '';
 const claveAnonima = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -27,6 +28,7 @@ interface Gimnasio {
 
 const SuperAdmin = () => {
   const navegar = useNavigate();
+  const { mostrarToast } = useToast();
   const [gimnasios, setGimnasios] = useState<Gimnasio[]>([]);
   const [cargando, setCargando] = useState(true);
 
@@ -189,9 +191,10 @@ const SuperAdmin = () => {
         .eq('id_gimnasio', id);
 
       if (error) throw error;
+      mostrarToast("Estado de suscripción actualizado con éxito.", "exito");
       obtenerGimnasios();
     } catch (err: any) {
-      alert("Error al cambiar estado: " + err.message);
+      mostrarToast("Error al cambiar estado: " + err.message, "error");
     }
   };
 
@@ -206,9 +209,10 @@ const SuperAdmin = () => {
         .eq('id_gimnasio', id);
 
       if (error) throw error;
+      mostrarToast("Suscripción renovada por 30 días.", "exito");
       obtenerGimnasios();
     } catch (err: any) {
-      alert("Error al renovar: " + err.message);
+      mostrarToast("Error al renovar: " + err.message, "error");
     }
   };
 
@@ -225,12 +229,13 @@ const SuperAdmin = () => {
           .eq('id_gimnasio', idGimnasio);
 
         if (error) throw error;
+        mostrarToast("Gimnasio eliminado con éxito.", "exito");
         obtenerGimnasios();
       } catch (err: any) {
-        alert("Error al eliminar: " + err.message);
+        mostrarToast("Error al eliminar: " + err.message, "error");
       }
     } else {
-      alert("La contraseña de seguridad ingresada es incorrecta. Operación denegada.");
+      mostrarToast("La contraseña de seguridad ingresada es incorrecta. Operación denegada.", "error");
     }
   };
 

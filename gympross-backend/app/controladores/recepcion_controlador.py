@@ -299,8 +299,13 @@ def registrar_pago():
         else:
             raise e
 
-    # 2. Activar membresía en clientes y establecer vencimiento a 30 días
-    fecha_exp = (datetime.now() + timedelta(days=30)).isoformat()
+    # 2. Activar membresía en clientes y establecer vencimiento
+    fecha_vencimiento_cliente = datos.get('fecha_vencimiento')
+    if fecha_vencimiento_cliente:
+        fecha_exp = fecha_vencimiento_cliente
+    else:
+        fecha_exp = (datetime.now() + timedelta(days=30)).isoformat()
+
     res = supabase_cliente.table('clientes') \
         .update({"estado_membresia": "activa", "fecha_vencimiento": fecha_exp}) \
         .eq('id_cliente', id_cliente) \

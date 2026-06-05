@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clienteSupabase } from '../supabaseClient';
+import { useToast } from '../contexto/ToastContext';
 
 interface Cliente {
   id_cliente: string;
@@ -33,6 +34,7 @@ interface Empleado {
 
 const Recepcion = () => {
   const navegar = useNavigate();
+  const { mostrarToast } = useToast();
   const [cargando, setCargando] = useState(true);
   const [nombreGimnasio, setNombreGimnasio] = useState('');
   
@@ -60,11 +62,14 @@ const Recepcion = () => {
   // Estados de Modals
   const [casilleroSeleccionado, setCasilleroSeleccionado] = useState<number | null>(null);
   const [clienteParaPago, setClienteParaPago] = useState<Cliente | null>(null);
+  const [empleadoParaAsistencia, setEmpleadoParaAsistencia] = useState<Empleado | null>(null);
+  const [pinEmpleadoAsistencia, setPinEmpleadoAsistencia] = useState('');
   const [montoPago, setMontoPago] = useState('30');
   const [metodoPago, setMetodoPago] = useState<'efectivo' | 'qr'>('efectivo');
 
   // Estados de Planes y Promociones
-  const [planSeleccionado, setPlanSeleccionado] = useState<'mensual' | 'ejecutivo' | 'anual'>('mensual');
+  const [planSeleccionado, setPlanSeleccionado] = useState<'mensual' | 'ejecutivo' | 'anual' | 'personalizado'>('mensual');
+  const [fechaVencimientoPago, setFechaVencimientoPago] = useState<string>('');
   const [promocionNombre, setPromocionNombre] = useState('');
   const [promocionDescuento, setPromocionDescuento] = useState(0);
   const [precioMensual, setPrecioMensual] = useState<number>(30);
@@ -191,15 +196,26 @@ const Recepcion = () => {
   }, []);
 
   useEffect(() => {
+    if (planSeleccionado === 'personalizado') return;
+
     const precios = {
       mensual: precioMensual,
       ejecutivo: precioEjecutivo,
       anual: precioAnual
     };
-    const precioBase = precios[planSeleccionado];
+    const precioBase = precios[planSeleccionado as 'mensual' | 'ejecutivo' | 'anual'];
     const descuento = (precioBase * promocionDescuento) / 100;
     const final = precioBase - descuento;
     setMontoPago(final.toFixed(2));
+
+    // Calcular fecha de vencimiento predeterminada
+    const hoy = new Date();
+    if (planSeleccionado === 'anual') {
+      hoy.setDate(hoy.getDate() + 365);
+    } else {
+      hoy.setDate(hoy.getDate() + 30);
+    }
+    setFechaVencimientoPago(hoy.toISOString().split('T')[0]);
   }, [planSeleccionado, promocionDescuento, clienteParaPago, precioMensual, precioEjecutivo, precioAnual]);
 
   const cerrarSesion = async () => {
@@ -226,14 +242,15 @@ const Recepcion = () => {
 
       if (!res.ok) throw new Error("Error al agregar casillero");
       setCantidadCasilleros(nuevaCantidad);
+      mostrarToast("Casillero agregado con éxito.", "exito");
     } catch (err: any) {
-      alert(err.message);
+      mostrarToast(err.message, "error");
     }
   };
 
   const eliminarCasillero = async () => {
     if (cantidadCasilleros <= 1) {
-      alert("Debe haber al menos 1 casillero.");
+      mostrarToast("Debe haber al menos 1 casillero.", "advertencia");
       return;
     }
     try {
@@ -250,8 +267,9 @@ const Recepcion = () => {
 
       if (!res.ok) throw new Error("Error al eliminar casillero");
       setCantidadCasilleros(nuevaCantidad);
+      mostrarToast("Casillero eliminado con éxito.", "exito");
     } catch (err: any) {
-      alert(err.message);
+      mostrarToast(err.message, "error");
     }
   };
 
@@ -316,9 +334,10 @@ const Recepcion = () => {
       if (!res.ok) throw new Error("Error al asignar el casillero");
       
       setCasilleroSeleccionado(null);
+      mostrarToast("Casillero asignado correctamente.", "exito");
       cargarDatos();
     } catch (err: any) {
-      alert(err.message);
+      mostrarToast(err.message, "error");
     }
   };
 
@@ -335,9 +354,10 @@ const Recepcion = () => {
       });
 
       if (!res.ok) throw new Error("Error al liberar el casillero");
+      mostrarToast("Casillero liberado correctamente.", "exito");
       cargarDatos();
     } catch (err: any) {
-      alert(err.message);
+      mostrarToast(err.message, "error");
     }
   };
 
@@ -369,10 +389,10 @@ const Recepcion = () => {
       setNombreNuevo('');
       setCiNuevo('');
       setMostrandoCrearCliente(false);
-      setMensajeOperacion('Cliente creado con éxito.');
+      mostrarToast('Socio registrado con éxito.', 'exito');
       cargarDatos();
     } catch (err: any) {
-      alert(err.message);
+      mostrarToast(err.message, 'error');
     }
   };
 
@@ -430,6 +450,8 @@ const Recepcion = () => {
     } catch (err) {
       console.error("Error al refrescar promoción para pago:", err);
     }
+    setPlanSeleccionado('mensual');
+    setMetodoPago('efectivo');
     setClienteParaPago(cliente);
   };
 
@@ -449,38 +471,48 @@ const Recepcion = () => {
         body: JSON.stringify({
           id_cliente: clienteParaPago.id_cliente,
           monto: montoPago,
-          tipo_pago: metodoPago
+          tipo_pago: metodoPago,
+          fecha_vencimiento: fechaVencimientoPago
         })
       });
 
       if (!res.ok) throw new Error("Error al registrar el pago");
 
       setClienteParaPago(null);
-      setMensajeOperacion('Pago guardado y membresía renovada.');
+      mostrarToast('Pago guardado y membresía renovada.', 'exito');
       cargarDatos();
     } catch (err: any) {
-      alert(err.message);
+      mostrarToast(err.message, 'error');
     }
   };
 
-  // 4. Marcar Asistencia Empleados Manual
-  const toggleAsistenciaEmpleado = async (idUsuario: string, adentro: boolean) => {
+  // 4. Marcar Asistencia Empleados Manual (Procesar con PIN validado desde el modal)
+  const procesarAsistenciaEmpleado = async (empleado: Empleado, pinIngresado: string) => {
+    const accion = empleado.adentro ? 'salida' : 'entrada';
+
+    if (pinIngresado !== empleado.pin_acceso) {
+      mostrarToast("El PIN ingresado es incorrecto. Operación rechazada.", "error");
+      return;
+    }
+
     try {
       const token = await obtenerToken();
-      const accion = adentro ? 'salida' : 'entrada';
       const res = await fetch('http://localhost:5000/api/recepcion/personal/marcar-asistencia', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ id_usuario: idUsuario, accion: accion })
+        body: JSON.stringify({ id_usuario: empleado.id_usuario, accion: accion })
       });
 
-      if (!res.ok) throw new Error("Error al marcar registro del empleado");
+      if (!res.ok) throw new Error("Error al registrar la asistencia del empleado.");
+      mostrarToast(`Asistencia de personal (${accion}) registrada con éxito.`, 'exito');
+      setEmpleadoParaAsistencia(null);
+      setPinEmpleadoAsistencia('');
       cargarDatos();
     } catch (err: any) {
-      alert(err.message);
+      mostrarToast(err.message, 'error');
     }
   };
 
@@ -515,12 +547,6 @@ const Recepcion = () => {
             <h1 className="text-4xl font-black mt-2">{nombreGimnasio || 'Cargando sucursal...'}</h1>
           </div>
           <div className="flex gap-4">
-            <button
-              onClick={() => setMostrandoAsistenciaPersonal(true)}
-              className="border border-white/20 hover:border-brand-red hover:text-brand-red bg-transparent text-white px-6 py-2.5 rounded-full font-semibold transition-all duration-300 cursor-pointer animate-pulse"
-            >
-              Asistencia Empleados
-            </button>
             <button
               onClick={() => navegar('/totem')}
               className="border border-white/20 hover:border-brand-red hover:text-brand-red bg-transparent text-white px-6 py-2.5 rounded-full font-semibold transition-all duration-300 cursor-pointer"
@@ -804,7 +830,10 @@ const Recepcion = () => {
                       </div>
                       
                       <button
-                        onClick={() => toggleAsistenciaEmpleado(emp.id_usuario, emp.adentro || false)}
+                        onClick={() => {
+                          setEmpleadoParaAsistencia(emp);
+                          setPinEmpleadoAsistencia('');
+                        }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition duration-300 cursor-pointer border ${
                           emp.adentro
                             ? 'border-brand-red/30 bg-brand-red/15 text-brand-red hover:bg-brand-red'
@@ -889,10 +918,11 @@ const Recepcion = () => {
                   <option value="mensual" className="bg-black">Plan Mensual ({precioMensual} {moneda})</option>
                   <option value="ejecutivo" className="bg-black">Plan Ejecutivo ({precioEjecutivo} {moneda})</option>
                   <option value="anual" className="bg-black">Plan Anual ({precioAnual} {moneda})</option>
+                  <option value="personalizado" className="bg-black">Personalizado (Monto y fecha libre)</option>
                 </select>
               </div>
 
-              {promocionNombre && (
+              {promocionNombre && planSeleccionado !== 'personalizado' && (
                 <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-4 text-xs">
                   <span className="font-bold text-green-400 block uppercase tracking-wider mb-1">Promoción Aplicada: {promocionNombre}</span>
                   <span className="text-gray-300">Se aplica un descuento automático del {promocionDescuento}% al precio base.</span>
@@ -907,6 +937,19 @@ const Recepcion = () => {
                   type="number"
                   value={montoPago}
                   onChange={(e) => setMontoPago(e.target.value)}
+                  required
+                  className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none transition-all duration-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  Fecha de Vencimiento de Membresía
+                </label>
+                <input
+                  type="date"
+                  value={fechaVencimientoPago}
+                  onChange={(e) => setFechaVencimientoPago(e.target.value)}
                   required
                   className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none transition-all duration-300"
                 />
@@ -1029,6 +1072,59 @@ const Recepcion = () => {
                   className="bg-brand-red hover:bg-brand-red/90 text-white py-2.5 rounded-xl text-xs font-bold transition cursor-pointer text-center"
                 >
                   Registrar Asistencia
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* MODAL 4: ASISTENCIA EMPLEADO CON PIN (MANUAL CLICK) */}
+      {empleadoParaAsistencia !== null && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex justify-center items-center p-4">
+          <div className="bg-white/5 border border-white/10 rounded-3xl max-w-md w-full p-6 md:p-8 relative shadow-2xl">
+            <h3 className="text-2xl font-bold mb-2">Asistencia de {empleadoParaAsistencia.nombre_completo}</h3>
+            <p className="text-xs text-gray-400 mb-6">
+              Ingresa el PIN de acceso del empleado para registrar su {empleadoParaAsistencia.adentro ? 'Salida' : 'Entrada'}.
+            </p>
+
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                procesarAsistenciaEmpleado(empleadoParaAsistencia, pinEmpleadoAsistencia);
+              }} 
+              className="space-y-6 text-left"
+            >
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  PIN de Acceso (6 dígitos)
+                </label>
+                <input
+                  type="password"
+                  maxLength={6}
+                  value={pinEmpleadoAsistencia}
+                  onChange={(e) => setPinEmpleadoAsistencia(e.target.value.replace(/\D/g, ''))}
+                  required
+                  className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-center text-xl font-mono tracking-widest text-white focus:outline-none transition-all duration-300"
+                  placeholder="••••••"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmpleadoParaAsistencia(null);
+                    setPinEmpleadoAsistencia('');
+                  }}
+                  className="border border-white/20 hover:border-brand-red text-white py-2.5 rounded-xl text-xs font-bold transition cursor-pointer text-center"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-brand-red hover:bg-brand-red/90 text-white py-2.5 rounded-xl text-xs font-bold transition cursor-pointer text-center"
+                >
+                  Confirmar
                 </button>
               </div>
             </form>
