@@ -20,6 +20,7 @@ const TotemPin = () => {
   const [mensajeError, setMensajeError] = useState('');
   const [datosIngreso, setDatosIngreso] = useState<InfoIngreso | null>(null);
   const [gimnasioNombre, setGimnasioNombre] = useState('Gimnasio');
+  const [logoUrl, setLogoUrl] = useState('');
 
   // Estados para los Casilleros
   const [cantidadCasilleros, setCantidadCasilleros] = useState(20);
@@ -41,11 +42,12 @@ const TotemPin = () => {
       if (perfil) {
         const { data: gim } = await clienteSupabase
           .from('gimnasios')
-          .select('nombre_gimnasio, cantidad_casilleros')
+          .select('nombre_gimnasio, cantidad_casilleros, logo_url')
           .eq('id_gimnasio', perfil.id_gimnasio)
           .maybeSingle();
         if (gim) {
           setGimnasioNombre(gim.nombre_gimnasio);
+          setLogoUrl(gim.logo_url || '');
           setCantidadCasilleros(gim.cantidad_casilleros || 20);
         }
       }
@@ -322,9 +324,13 @@ const TotemPin = () => {
       {/* Cabecera */}
       <div className="flex justify-between items-center relative z-10 w-full max-w-7xl mx-auto py-2">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-brand-red flex items-center justify-center font-black text-sm text-white">
-            GP
-          </div>
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo Gimnasio" className="w-8 h-8 rounded-full object-cover border border-white/25 shadow-[0_0_10px_rgba(255,255,255,0.1)]" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-brand-red flex items-center justify-center font-black text-sm text-white">
+              GP
+            </div>
+          )}
           <span className="text-xs font-bold uppercase tracking-wider text-brand-red">
             {gimnasioNombre} (Autoservicio)
           </span>

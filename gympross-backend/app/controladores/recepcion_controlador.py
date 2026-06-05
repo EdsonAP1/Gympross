@@ -438,6 +438,7 @@ def obtener_datos_dashboard():
         asistencias_db = f_recientes.result()
         
     nombre_gimnasio = 'GymPross'
+    logo_url = ''
     cantidad_casilleros = 20
     contrasena_dueno = 'password123'
     contrasena_recepcion = 'password123'
@@ -450,6 +451,7 @@ def obtener_datos_dashboard():
     
     if gimnasio_data:
         nombre_gimnasio = gimnasio_data.get('nombre_gimnasio') or 'GymPross'
+        logo_url = gimnasio_data.get('logo_url') or ''
         cantidad_casilleros = gimnasio_data.get('cantidad_casilleros') or 20
         contrasena_dueno = gimnasio_data.get('contrasena_dueno') or 'password123'
         contrasena_recepcion = gimnasio_data.get('contrasena_recepcion') or 'password123'
@@ -506,6 +508,7 @@ def obtener_datos_dashboard():
 
     return jsonify({
         "nombre_gimnasio": nombre_gimnasio,
+        "logo_url": logo_url,
         "clientes": clientes,
         "asistencias_activas": asistencias_activas,
         "asistencias_recientes": asistencias_recientes,
@@ -702,3 +705,71 @@ def obtener_reporte_caja():
         "total_caja": total_efectivo + total_qr,
         "pagos_hoy": pagos_hoy
     }), 200
+
+
+@recepcion_bp.route('/gimnasio/reporte-financiero', methods=['GET'])
+@requerir_autenticacion_y_suscripcion
+def obtener_reporte_financiero():
+    id_gimnasio = request.id_gimnasio_seguro
+    
+    fecha_inicio_str = request.args.get('fecha_inicio') # YYYY-MM-DD
+    fecha_fin_str = request.args.get('fecha_fin') # YYYY-MM-DD
+    
+    query = supabase_cliente.table('pagos_registro').select('*').eq('id_gimnasio', id_gimnasio)
+    
+    if fecha_inicio_str:
+        if len(fecha_inicio_str) == 10:
+            fecha_inicio_iso = f"{fecha_inicio_str}T00:00:00"
+        else:
+            fecha_inicio_iso = fecha_inicio_str
+        query = query.gte('fecha_pago', fecha_inicio_iso)
+        
+    if fecha_fin_str:
+        if len(fecha_fin_str) == 10:
+            fecha_fin_iso = f"{fecha_fin_str}T23:59:59.999999"
+        else:
+            fecha_fin_iso = fecha_fin_str
+        query = query.lte('fecha_pago', fecha_fin_iso)
+        
+    res_pagos = query.order('fecha_pago', desc=True).execute()
+    pagos = res_pagos.data or []
+    
+    # Obtener clientes y personal para mapear nombres
+    res_clientes = supabase_cliente.table('clientes').select('id_cliente, nombre_completo').eq('id_gimnasio', id_gimnasio).execute()
+    clientes_map = {c['id_cliente']: c['nombre_completo'] for c in (res_clientes.data or [])}
+    
+    res_personal = supabase_cliente.table('usuarios_personal').select('id_usuario, nombre_completo').eq('id_gimnasio', id_gimnasio).execute()
+    personal_map = {p['id_usuario']: p['nombre_completo'] for p in (res_personal.data or [])}
+    
+    total_efectivo = 0.0
+    total_qr = 0.0
+    pagos_lista = []
+    
+    for p in pagos:
+        monto = float(p.get('monto') or 0.0)
+        tipo = p.get('tipo_pago', 'efectivo')
+        
+        if tipo == 'efectivo':
+            total_efectivo += monto
+        else:
+            total_qr += monto
+            
+        cliente_nombre = clientes_map.get(p.get('id_cliente'), 'Cliente Desconocido')
+        recepcionista_nombre = personal_map.get(p.get('id_usuario'), 'Operador / Recepción')
+        
+        pagos_lista.append({
+            "id_pago": p['id_pago'],
+            "cliente": cliente_nombre,
+            "monto": monto,
+            "tipo_pago": tipo,
+            "fecha_pago": p.get('fecha_pago'),
+            "recepcionista": recepcionista_nombre
+        })
+        
+    return jsonify({
+        "total_efectivo": total_efectivo,
+        "total_qr": total_qr,
+        "total_periodo": total_efectivo + total_qr,
+        "pagos": pagos_lista
+    }), 200
+

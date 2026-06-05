@@ -34,6 +34,8 @@ const Dueno = () => {
   const [primeraCarga, setPrimeraCarga] = useState(true);
   const [gimnasioId, setGimnasioId] = useState('');
   const [nombreGimnasio, setNombreGimnasio] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [listaClientes, setListaClientes] = useState<Cliente[]>([]);
   
@@ -46,8 +48,28 @@ const Dueno = () => {
   const [totalQR, setTotalQR] = useState(0);
   const [pagosHoy, setPagosHoy] = useState<any[]>([]);
 
+  // Filtros de Ganancias e Ingresos Históricos
+  const [fechaInicioFiltro, setFechaInicioFiltro] = useState<string>(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString('sv-SE');
+  });
+  const [fechaFinFiltro, setFechaFinFiltro] = useState<string>(() => {
+    return new Date().toLocaleDateString('sv-SE');
+  });
+  const [cargandoReporte, setCargandoReporte] = useState(false);
+  const [datosReporteFinanciero, setDatosReporteFinanciero] = useState<{
+    total_efectivo: number;
+    total_qr: number;
+    total_periodo: number;
+    pagos: any[];
+  }>({
+    total_efectivo: 0,
+    total_qr: 0,
+    total_periodo: 0,
+    pagos: []
+  });
+
   // Estadísticas avanzadas
-  const [recaudacionPersonal, setRecaudacionPersonal] = useState<any[]>([]);
   const [visitasPorDia, setVisitasPorDia] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [recaudacionHoy, setRecaudacionHoy] = useState(0);
   const [recaudacionSemana, setRecaudacionSemana] = useState(0);
@@ -137,54 +159,53 @@ const Dueno = () => {
         setGimnasioId(idGimnasio);
       }
 
-      // 2. Obtener datos del gimnasio solo si no están cargados
-      if (!nombreGimnasio) {
-        const { data: gimnasioInfo, error: errorGim } = await clienteSupabase
-          .from('gimnasios')
-          .select('*')
-          .eq('id_gimnasio', idGimnasio)
-          .maybeSingle();
+      // 2. Obtener datos del gimnasio
+      const { data: gimnasioInfo, error: errorGim } = await clienteSupabase
+        .from('gimnasios')
+        .select('*')
+        .eq('id_gimnasio', idGimnasio)
+        .maybeSingle();
 
-        if (errorGim) throw errorGim;
-        if (gimnasioInfo) {
-          setNombreGimnasio(gimnasioInfo.nombre_gimnasio);
-          setContrasenaDueno(gimnasioInfo.contrasena_dueno || 'password123');
-          setContrasenaRecepcion(gimnasioInfo.contrasena_recepcion || 'password123');
-          const promoStr = gimnasioInfo.promocion_nombre || '';
-          setPromocionNombre(promoStr);
-          setPromocionDescuento(gimnasioInfo.promocion_descuento || 0);
-          
-          const partes = promoStr.split('||');
-          if (partes.length === 3) {
-            setPromoNombreBase(partes[0]);
-            setPromoActiva(partes[1] === 'true');
-            setPromoVencimiento(partes[2] || '');
-          } else {
-            setPromoNombreBase(promoStr);
-            setPromoActiva(promoStr !== '');
-            setPromoVencimiento('');
-          }
-          // Cargar precios con fallbacks y usar localStorage si existe
-          const localTarifasStr = localStorage.getItem(`gym_tarifas_${idGimnasio}`);
-          if (localTarifasStr) {
-            try {
-              const localTarifas = JSON.parse(localTarifasStr);
-              setPrecioMensual(localTarifas.precio_mensual !== undefined ? localTarifas.precio_mensual : 30);
-              setPrecioEjecutivo(localTarifas.precio_ejecutivo !== undefined ? localTarifas.precio_ejecutivo : 20);
-              setPrecioAnual(localTarifas.precio_anual !== undefined ? localTarifas.precio_anual : 250);
-              setMoneda(localTarifas.moneda || 'USD');
-            } catch (e) {
-              setPrecioMensual(gimnasioInfo.precio_mensual !== undefined && gimnasioInfo.precio_mensual !== null ? parseFloat(gimnasioInfo.precio_mensual) : 30);
-              setPrecioEjecutivo(gimnasioInfo.precio_ejecutivo !== undefined && gimnasioInfo.precio_ejecutivo !== null ? parseFloat(gimnasioInfo.precio_ejecutivo) : 20);
-              setPrecioAnual(gimnasioInfo.precio_anual !== undefined && gimnasioInfo.precio_anual !== null ? parseFloat(gimnasioInfo.precio_anual) : 250);
-              setMoneda(gimnasioInfo.moneda || 'USD');
-            }
-          } else {
+      if (errorGim) throw errorGim;
+      if (gimnasioInfo) {
+        setNombreGimnasio(gimnasioInfo.nombre_gimnasio);
+        setLogoUrl(gimnasioInfo.logo_url || '');
+        setContrasenaDueno(gimnasioInfo.contrasena_dueno || 'password123');
+        setContrasenaRecepcion(gimnasioInfo.contrasena_recepcion || 'password123');
+        const promoStr = gimnasioInfo.promocion_nombre || '';
+        setPromocionNombre(promoStr);
+        setPromocionDescuento(gimnasioInfo.promocion_descuento || 0);
+        
+        const partes = promoStr.split('||');
+        if (partes.length === 3) {
+          setPromoNombreBase(partes[0]);
+          setPromoActiva(partes[1] === 'true');
+          setPromoVencimiento(partes[2] || '');
+        } else {
+          setPromoNombreBase(promoStr);
+          setPromoActiva(promoStr !== '');
+          setPromoVencimiento('');
+        }
+        // Cargar precios con fallbacks y usar localStorage si existe
+        const localTarifasStr = localStorage.getItem(`gym_tarifas_${idGimnasio}`);
+        if (localTarifasStr) {
+          try {
+            const localTarifas = JSON.parse(localTarifasStr);
+            setPrecioMensual(localTarifas.precio_mensual !== undefined ? localTarifas.precio_mensual : 30);
+            setPrecioEjecutivo(localTarifas.precio_ejecutivo !== undefined ? localTarifas.precio_ejecutivo : 20);
+            setPrecioAnual(localTarifas.precio_anual !== undefined ? localTarifas.precio_anual : 250);
+            setMoneda(localTarifas.moneda || 'USD');
+          } catch (e) {
             setPrecioMensual(gimnasioInfo.precio_mensual !== undefined && gimnasioInfo.precio_mensual !== null ? parseFloat(gimnasioInfo.precio_mensual) : 30);
             setPrecioEjecutivo(gimnasioInfo.precio_ejecutivo !== undefined && gimnasioInfo.precio_ejecutivo !== null ? parseFloat(gimnasioInfo.precio_ejecutivo) : 20);
             setPrecioAnual(gimnasioInfo.precio_anual !== undefined && gimnasioInfo.precio_anual !== null ? parseFloat(gimnasioInfo.precio_anual) : 250);
             setMoneda(gimnasioInfo.moneda || 'USD');
           }
+        } else {
+          setPrecioMensual(gimnasioInfo.precio_mensual !== undefined && gimnasioInfo.precio_mensual !== null ? parseFloat(gimnasioInfo.precio_mensual) : 30);
+          setPrecioEjecutivo(gimnasioInfo.precio_ejecutivo !== undefined && gimnasioInfo.precio_ejecutivo !== null ? parseFloat(gimnasioInfo.precio_ejecutivo) : 20);
+          setPrecioAnual(gimnasioInfo.precio_anual !== undefined && gimnasioInfo.precio_anual !== null ? parseFloat(gimnasioInfo.precio_anual) : 250);
+          setMoneda(gimnasioInfo.moneda || 'USD');
         }
       }
 
@@ -285,23 +306,9 @@ const Dueno = () => {
         setRecaudacionHoy(recHoy);
         setRecaudacionSemana(recSemana);
         setRecaudacionMes(recMes);
-
-        // Agrupar recaudación por cada recepcionista
-        const listaPersonal = datosPersonal || [];
-        const agrupado = listaPersonal.map((p: any) => {
-          const total = pagos
-            .filter((pago: any) => pago.id_usuario === p.id_usuario)
-            .reduce((sum: number, curr: any) => sum + parseFloat(curr.monto || 0), 0);
-          return {
-            nombre: p.nombre_completo,
-            rol: p.rol_usuario,
-            total: total
-          };
-        }).filter((item: any) => item.total > 0 || item.rol === 'recepcionista');
-        setRecaudacionPersonal(agrupado);
       }
-
-      // 6. Obtener reporte de caja del día
+      
+      // 6. Obtener reporte de caja del día y reporte financiero por rango
       const token = (await clienteSupabase.auth.getSession()).data.session?.access_token || '';
       if (token) {
         const resReporte = await fetch('http://localhost:5000/api/recepcion/gimnasio/reporte-caja', {
@@ -314,6 +321,21 @@ const Dueno = () => {
           setTotalEfectivo(datosReporte.total_efectivo || 0);
           setTotalQR(datosReporte.total_qr || 0);
           setPagosHoy(datosReporte.pagos_hoy || []);
+        }
+
+        // 6.5. Obtener reporte financiero del rango inicial
+        const queryParams = new URLSearchParams({
+          fecha_inicio: fechaInicioFiltro,
+          fecha_fin: fechaFinFiltro
+        });
+        const resFinanciero = await fetch(`http://localhost:5000/api/recepcion/gimnasio/reporte-financiero?${queryParams}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (resFinanciero.ok) {
+          const datosFinanciero = await resFinanciero.json();
+          setDatosReporteFinanciero(datosFinanciero);
         }
       }
 
@@ -348,6 +370,312 @@ const Dueno = () => {
     }
     cargarDatos();
   }, []);
+
+  const cargarReporteFinanciero = async () => {
+    setCargandoReporte(true);
+    try {
+      const token = (await clienteSupabase.auth.getSession()).data.session?.access_token || '';
+      if (token) {
+        const queryParams = new URLSearchParams({
+          fecha_inicio: fechaInicioFiltro,
+          fecha_fin: fechaFinFiltro
+        });
+        const res = await fetch(`http://localhost:5000/api/recepcion/gimnasio/reporte-financiero?${queryParams}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDatosReporteFinanciero(data);
+          mostrarToast("Reporte financiero actualizado.", "exito");
+        } else {
+          mostrarToast("Error al cargar el reporte financiero.", "error");
+        }
+      }
+    } catch (err: any) {
+      console.error("Error al cargar reporte financiero:", err.message);
+      mostrarToast("Error de conexión al obtener reporte.", "error");
+    } finally {
+      setCargandoReporte(false);
+    }
+  };
+
+  const obtenerImagenBase64 = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        } else {
+          reject(new Error("No se pudo obtener contexto 2D"));
+        }
+      };
+      img.onerror = (e) => reject(e);
+      img.src = url;
+    });
+  };
+
+  const exportarGananciasPDF = async () => {
+    const doc = new jsPDF();
+    
+    // Intentar cargar el logo
+    let base64Logo: string | null = null;
+    if (logoUrl) {
+      try {
+        base64Logo = await obtenerImagenBase64(logoUrl);
+      } catch (e) {
+        console.error("Error cargando logo en Base64 para el PDF:", e);
+      }
+    }
+
+    // Cabecera / Diseño Premium
+    if (base64Logo) {
+      doc.addImage(base64Logo, 'PNG', 15, 12, 18, 18);
+    } else {
+      doc.setFillColor(220, 38, 38); // Rojo
+      doc.roundedRect(15, 12, 18, 18, 4, 4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("GP", 21, 23);
+    }
+
+    doc.setTextColor(18, 18, 18);
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.text(nombreGimnasio.toUpperCase() || "GYMPROSS CENTRAL", 38, 19);
+    
+    doc.setFontSize(9.5);
+    doc.setTextColor(220, 38, 38);
+    doc.text("REPORTE FINANCIERO Y CONTROL DE GANANCIAS", 38, 26);
+    
+    doc.setDrawColor(220, 38, 38);
+    doc.setLineWidth(0.6);
+    doc.line(15, 36, 195, 36);
+    
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Rango de Fechas: ${fechaInicioFiltro} al ${fechaFinFiltro}`, 15, 43);
+    doc.text(`Fecha Emisión: ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}`, 115, 43);
+    doc.text(`ID Gimnasio: ${gimnasioId}`, 15, 48);
+
+    const drawCard = (x: number, y: number, w: number, h: number, label: string, val: string, color: [number, number, number]) => {
+      doc.setFillColor(248, 249, 250);
+      doc.setDrawColor(233, 236, 239);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(x, y, w, h, 3, 3, 'FD');
+      
+      doc.setTextColor(108, 117, 125);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "normal");
+      doc.text(label, x + 4, y + 7);
+      
+      doc.setTextColor(color[0], color[1], color[2]);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text(val, x + 4, y + 16);
+    };
+
+    const totalStr = datosReporteFinanciero.total_periodo.toLocaleString('es-ES', { style: 'currency', currency: moneda });
+    const efectivoStr = datosReporteFinanciero.total_efectivo.toLocaleString('es-ES', { style: 'currency', currency: moneda });
+    const qrStr = datosReporteFinanciero.total_qr.toLocaleString('es-ES', { style: 'currency', currency: moneda });
+
+    drawCard(15, 54, 55, 22, "TOTAL RECAUDADO", totalStr, [46, 125, 50]);
+    drawCard(75, 54, 55, 22, "RECAUDACIÓN EFECTIVO", efectivoStr, [18, 18, 18]);
+    drawCard(135, 54, 60, 22, "RECAUDACIÓN QR / BANCO", qrStr, [25, 118, 210]);
+
+    let currentY = 84;
+
+    if (datosReporteFinanciero.pagos.length === 0) {
+      doc.setTextColor(150, 150, 150);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text("No se encontraron registros de cobros en este rango.", 15, currentY);
+    } else {
+      const cabeceras = [["Fecha y Hora", "Cliente / Socio", "Monto", "Forma de Pago", "Operador"]];
+      const filas = datosReporteFinanciero.pagos.map(p => {
+        const fecha = new Date(p.fecha_pago).toLocaleDateString('es-ES') + ' ' + new Date(p.fecha_pago).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const cliente = p.cliente;
+        const monto = parseFloat(p.monto).toLocaleString('es-ES', { style: 'currency', currency: moneda });
+        const metodo = p.tipo_pago === 'efectivo' ? 'Efectivo' : 'QR / Banco';
+        const recepcionista = p.recepcionista;
+        return [fecha, cliente, monto, metodo, recepcionista];
+      });
+
+      autoTable(doc, {
+        startY: currentY,
+        head: cabeceras,
+        body: filas,
+        headStyles: {
+          fillColor: [220, 38, 38],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'left'
+        },
+        columnStyles: {
+          0: { cellWidth: 38 },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 30, fontStyle: 'bold', halign: 'right' },
+          3: { cellWidth: 32, halign: 'center' },
+          4: { cellWidth: 40 }
+        },
+        styles: {
+          fontSize: 8.5,
+          cellPadding: 3
+        },
+        alternateRowStyles: {
+          fillColor: [250, 250, 250]
+        },
+        didParseCell: (data) => {
+          if (data.column.index === 3 && data.cell.section === 'body') {
+            const text = data.cell.text[0];
+            if (text === 'Efectivo') {
+              data.cell.styles.textColor = [46, 125, 50];
+              data.cell.styles.fontStyle = 'bold';
+            } else {
+              data.cell.styles.textColor = [25, 118, 210];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+        }
+      });
+
+      currentY = (doc as any).lastAutoTable.finalY + 12;
+
+      if (currentY > 260) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      doc.setFillColor(243, 244, 246);
+      doc.roundedRect(15, currentY, 180, 24, 2, 2, 'F');
+      doc.setTextColor(17, 24, 39);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Resumen de Auditoría Financiera:", 20, currentY + 7);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.text(`Cantidad de Cobros Procesados: ${datosReporteFinanciero.pagos.length} transacciones`, 20, currentY + 14);
+      doc.text(`Promedio por Cobro: ${(datosReporteFinanciero.total_periodo / datosReporteFinanciero.pagos.length).toLocaleString('es-ES', { style: 'currency', currency: moneda })}`, 20, currentY + 19);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(220, 38, 38);
+      doc.text(`Corte de Caja Total: ${totalStr}`, 125, currentY + 14);
+    }
+
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  };
+
+
+  const subirLogoGimnasio = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo de archivo (solo png, jpg, jpeg)
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    const formatosValidos = ['png', 'jpg', 'jpeg'];
+    if (!formatosValidos.includes(extension) || !file.type.startsWith('image/')) {
+      mostrarToast("Por favor, selecciona una imagen en formato PNG o JPG.", "error");
+      return;
+    }
+
+    // Validar tamaño (máximo 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      mostrarToast("La imagen del logo no debe superar los 2MB.", "error");
+      return;
+    }
+
+    setSubiendoLogo(true);
+    try {
+      // 1. Listar y eliminar cualquier archivo anterior en la carpeta del gimnasio
+      const { data: listaArchivos, error: errorList } = await clienteSupabase.storage
+        .from('gimnasios-logos')
+        .list(gimnasioId);
+
+      if (!errorList && listaArchivos && listaArchivos.length > 0) {
+        const archivosAEliminar = listaArchivos.map(f => `${gimnasioId}/${f.name}`);
+        await clienteSupabase.storage
+          .from('gimnasios-logos')
+          .remove(archivosAEliminar);
+      }
+
+      // 2. Subir el nuevo archivo
+      const filePath = `${gimnasioId}/logo.${extension}`;
+      const { error: uploadError } = await clienteSupabase.storage
+        .from('gimnasios-logos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // 3. Obtener la URL pública
+      const { data: { publicUrl } } = clienteSupabase.storage
+        .from('gimnasios-logos')
+        .getPublicUrl(filePath);
+
+      // Añadir timestamp para romper la caché del navegador al cargar la imagen
+      const finalUrl = `${publicUrl}?t=${Date.now()}`;
+
+      // 4. Actualizar la URL del logo en la base de datos
+      const { error: dbError } = await clienteSupabase
+        .from('gimnasios')
+        .update({ logo_url: finalUrl })
+        .eq('id_gimnasio', gimnasioId);
+
+      if (dbError) throw dbError;
+
+      setLogoUrl(finalUrl);
+      mostrarToast("Logo del gimnasio actualizado correctamente.", "exito");
+    } catch (err: any) {
+      mostrarToast("Error al subir el logo: " + err.message, "error");
+    } finally {
+      setSubiendoLogo(false);
+    }
+  };
+
+  const eliminarLogoGimnasio = async () => {
+    if (!confirm("¿Estás seguro de que deseas eliminar el logo de tu gimnasio?")) return;
+
+    setSubiendoLogo(true);
+    try {
+      // 1. Listar y borrar archivos de la carpeta del gimnasio en Storage
+      const { data: listaArchivos, error: errorList } = await clienteSupabase.storage
+        .from('gimnasios-logos')
+        .list(gimnasioId);
+
+      if (!errorList && listaArchivos && listaArchivos.length > 0) {
+        const archivosAEliminar = listaArchivos.map(f => `${gimnasioId}/${f.name}`);
+        await clienteSupabase.storage
+          .from('gimnasios-logos')
+          .remove(archivosAEliminar);
+      }
+
+      // 2. Actualizar campo en BD a NULL
+      const { error: dbError } = await clienteSupabase
+        .from('gimnasios')
+        .update({ logo_url: null })
+        .eq('id_gimnasio', gimnasioId);
+
+      if (dbError) throw dbError;
+
+      setLogoUrl('');
+      mostrarToast("Logo del gimnasio eliminado correctamente.", "exito");
+    } catch (err: any) {
+      mostrarToast("Error al eliminar el logo: " + err.message, "error");
+    } finally {
+      setSubiendoLogo(false);
+    }
+  };
 
   const cerrarSesion = async () => {
     await clienteSupabase.auth.signOut();
@@ -861,9 +1189,13 @@ const Dueno = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-white/10 pb-8">
           <div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-brand-red flex items-center justify-center font-black text-sm text-white">
-                GP
-              </div>
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo Gimnasio" className="w-8 h-8 rounded-full object-cover border border-white/25 shadow-[0_0_10px_rgba(255,255,255,0.1)]" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-brand-red flex items-center justify-center font-black text-sm text-white">
+                  GP
+                </div>
+              )}
               <span className="text-sm font-bold uppercase tracking-wider text-brand-red">Owner Dashboard</span>
             </div>
             <h1 className="text-4xl font-black mt-2">{nombreGimnasio || 'Cargando gimnasio...'}</h1>
@@ -1070,92 +1402,168 @@ const Dueno = () => {
                   )}
                 </div>
 
-                {/* ESTADÍSTICAS AVANZADAS DEL NEGOCIO */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-left">
-                  
-                  {/* Bloque 1: Días de Mayor Asistencia */}
-                  <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
+                {/* REPORTE DE INGRESOS POR RANGO DE FECHAS */}
+                <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-4 text-left">
                     <div>
-                      <h2 className="text-xl font-bold uppercase tracking-wide text-brand-red text-sm">Flujo de Asistencias por Día</h2>
-                      <p className="text-xs text-gray-400 mt-1">Análisis de visitas en la semana para identificar los días de mayor concurrencia.</p>
+                      <h2 className="text-2xl font-bold">Auditoría y Reporte Financiero</h2>
+                      <p className="text-xs text-gray-400 mt-1">Filtra la recaudación por rangos de fechas personalizados y genera reportes de ganancias en PDF de calidad premium.</p>
                     </div>
-                    
-                    <div className="flex justify-between items-end h-56 pt-8 pb-2 px-2 border-b border-white/10">
-                      {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((diaNombre) => {
-                        const diaIndex = diaNombre === 'Domingo' ? 0 : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].indexOf(diaNombre) + 1;
-                        const visitas = visitasPorDia[diaIndex] || 0;
-                        const maxVisitas = Math.max(...visitasPorDia, 1);
-                        const porcentaje = Math.round((visitas / maxVisitas) * 100);
-
-                        return (
-                          <div key={diaNombre} className="flex flex-col items-center flex-1 group h-full justify-end relative">
-                            {/* Tooltip / Valor sobre la barra */}
-                            <div className="absolute top-[-5px] bg-brand-red text-white text-[10px] font-black py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-md whitespace-nowrap z-20">
-                              {visitas} visitas
-                            </div>
-                            
-                            {/* Valor estático si tiene visitas */}
-                            {visitas > 0 && (
-                              <span className="text-[10px] font-bold text-gray-300 mb-1 font-mono transition group-hover:opacity-0">
-                                {visitas}
-                              </span>
-                            )}
-                            
-                            {/* Barra vertical */}
-                            <div 
-                              className="w-8 sm:w-10 bg-gradient-to-t from-brand-red/30 to-brand-red rounded-t-lg transition-all duration-500 hover:from-brand-red hover:to-brand-red/80 cursor-pointer shadow-[0_0_10px_rgba(229,57,53,0.1)] border border-brand-red/20 border-b-0"
-                              style={{ height: visitas > 0 ? `calc(${porcentaje}% - 20px)` : '4px', minHeight: '4px' }}
-                            ></div>
-
-                            {/* Etiqueta del día */}
-                            <span className="text-[10px] font-black text-gray-400 mt-2 tracking-wider group-hover:text-brand-red transition-colors">
-                              {diaNombre.substring(0, 3).toUpperCase()}
-                            </span>
-                          </div>
-                        );
-                      })}
+                    <div>
+                      <button
+                        onClick={exportarGananciasPDF}
+                        disabled={datosReporteFinanciero.pagos.length === 0}
+                        className="bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-400 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition-all duration-300 shadow-[0_0_15px_rgba(34,197,94,0.2)] cursor-pointer text-center uppercase tracking-wider flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Descargar Reporte PDF
+                      </button>
                     </div>
                   </div>
 
-                  {/* Bloque 2: Recaudación por Recepcionista */}
-                  <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
-                    <div>
-                      <h2 className="text-xl font-bold uppercase tracking-wide text-brand-red text-sm">Recaudación por Operador</h2>
-                      <p className="text-xs text-gray-400 mt-1">Auditoría financiera consolidada de ingresos registrados por cada recepcionista.</p>
+                  {/* Formulario de Filtros de Fechas */}
+                  <div className="flex flex-col md:flex-row items-end gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 text-left">
+                    <div className="flex-1 w-full">
+                      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Fecha de Inicio</label>
+                      <input
+                        type="date"
+                        value={fechaInicioFiltro}
+                        onChange={(e) => setFechaInicioFiltro(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300"
+                      />
                     </div>
+                    <div className="flex-1 w-full">
+                      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Fecha de Finalización</label>
+                      <input
+                        type="date"
+                        value={fechaFinFiltro}
+                        onChange={(e) => setFechaFinFiltro(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-all duration-300"
+                      />
+                    </div>
+                    <div className="w-full md:w-auto">
+                      <button
+                        onClick={cargarReporteFinanciero}
+                        disabled={cargandoReporte}
+                        className="w-full bg-brand-red hover:bg-brand-red/90 disabled:bg-brand-red/50 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition-all duration-300 shadow-[0_0_15px_rgba(229,57,53,0.3)] cursor-pointer text-center uppercase tracking-wider"
+                      >
+                        {cargandoReporte ? 'Buscando...' : 'Filtrar Rango'}
+                      </button>
+                    </div>
+                  </div>
 
-                    <div className="space-y-4">
-                      {recaudacionPersonal.length === 0 ? (
-                        <p className="text-sm text-gray-400 text-center py-12">No hay cobros registrados en el sistema aún.</p>
-                      ) : (
-                        recaudacionPersonal.map((operador) => (
-                          <div 
-                            key={operador.nombre}
-                            className="bg-white/5 border border-white/5 rounded-2xl p-4 flex justify-between items-center hover:border-white/10 transition-all duration-300"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-brand-red/10 border border-brand-red/20 flex items-center justify-center font-bold text-brand-red text-sm">
-                                {operador.nombre.substring(0, 2).toUpperCase()}
-                              </div>
-                              <div>
-                                <h4 className="font-bold text-sm text-white">{operador.nombre}</h4>
-                                <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-                                  {operador.rol === 'recepcionista' ? 'Recepcionista' : operador.rol}
+                  {/* Resultados y KPI del Rango */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-4 text-left">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Recaudado en Período</span>
+                      <h4 className="text-2xl font-black text-green-400 mt-1">
+                        {datosReporteFinanciero.total_periodo.toLocaleString('es-ES', { style: 'currency', currency: moneda })}
+                      </h4>
+                    </div>
+                    <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-left">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Monto en Efectivo</span>
+                      <h4 className="text-2xl font-black text-white mt-1">
+                        {datosReporteFinanciero.total_efectivo.toLocaleString('es-ES', { style: 'currency', currency: moneda })}
+                      </h4>
+                    </div>
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 text-left">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Monto por Transferencia / QR</span>
+                      <h4 className="text-2xl font-black text-blue-400 mt-1">
+                        {datosReporteFinanciero.total_qr.toLocaleString('es-ES', { style: 'currency', currency: moneda })}
+                      </h4>
+                    </div>
+                  </div>
+
+                  {/* Tabla de cobros del rango */}
+                  {datosReporteFinanciero.pagos.length === 0 ? (
+                    <p className="text-gray-400 text-center py-8">No se encontraron transacciones registradas en este período.</p>
+                  ) : (
+                    <div className="overflow-x-auto border border-white/5 rounded-2xl">
+                      <table className="w-full border-collapse text-left text-sm">
+                        <thead>
+                          <tr className="bg-white/5 border-b border-white/10 text-gray-400 uppercase tracking-wider text-xs">
+                            <th className="p-4">Fecha y Hora</th>
+                            <th className="p-4">Socio / Cliente</th>
+                            <th className="p-4">Monto</th>
+                            <th className="p-4">Forma de Pago</th>
+                            <th className="p-4">Operador que Cobró</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 text-gray-200">
+                          {datosReporteFinanciero.pagos.map((pago) => (
+                            <tr key={pago.id_pago} className="hover:bg-white/5 transition-colors">
+                              <td className="p-4 font-mono text-xs text-gray-400">
+                                {new Date(pago.fecha_pago).toLocaleDateString('es-ES')} {new Date(pago.fecha_pago).toLocaleTimeString('es-ES', {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </td>
+                              <td className="p-4 font-bold text-white">{pago.cliente}</td>
+                              <td className="p-4 font-mono font-bold text-green-400">
+                                {parseFloat(pago.monto).toLocaleString('es-ES', { style: 'currency', currency: moneda })}
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${
+                                  pago.tipo_pago === 'efectivo'
+                                    ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                                    : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                }`}>
+                                  {pago.tipo_pago === 'efectivo' ? 'Efectivo' : 'QR / Banco'}
                                 </span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-xs text-gray-400 block font-semibold uppercase">Total Recaudado</span>
-                              <span className="text-lg font-black text-green-400 font-mono">
-                                {operador.total.toLocaleString('es-ES', { style: 'currency', currency: moneda })}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      )}
+                              </td>
+                              <td className="p-4 text-brand-red font-semibold">{pago.recepcionista}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
+                  )}
+                </div>
 
+                {/* Bloque: Días de Mayor Asistencia */}
+                <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 text-left">
+                  <div>
+                    <h2 className="text-xl font-bold uppercase tracking-wide text-brand-red text-sm">Flujo de Asistencias por Día</h2>
+                    <p className="text-xs text-gray-400 mt-1">Análisis de visitas en la semana para identificar los días de mayor concurrencia.</p>
+                  </div>
+                  
+                  <div className="flex justify-between items-end h-56 pt-8 pb-2 px-2 border-b border-white/10">
+                    {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((diaNombre) => {
+                      const diaIndex = diaNombre === 'Domingo' ? 0 : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].indexOf(diaNombre) + 1;
+                      const visitas = visitasPorDia[diaIndex] || 0;
+                      const maxVisitas = Math.max(...visitasPorDia, 1);
+                      const porcentaje = Math.round((visitas / maxVisitas) * 100);
+
+                      return (
+                        <div key={diaNombre} className="flex flex-col items-center flex-1 group h-full justify-end relative">
+                          {/* Tooltip / Valor sobre la barra */}
+                          <div className="absolute top-[-5px] bg-brand-red text-white text-[10px] font-black py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-md whitespace-nowrap z-20">
+                            {visitas} visitas
+                          </div>
+                          
+                          {/* Valor estático si tiene visitas */}
+                          {visitas > 0 && (
+                            <span className="text-[10px] font-bold text-gray-300 mb-1 font-mono transition group-hover:opacity-0">
+                              {visitas}
+                            </span>
+                          )}
+                          
+                          {/* Barra vertical */}
+                          <div 
+                            className="w-8 sm:w-10 bg-gradient-to-t from-brand-red/30 to-brand-red rounded-t-lg transition-all duration-500 hover:from-brand-red hover:to-brand-red/80 cursor-pointer shadow-[0_0_10px_rgba(229,57,53,0.1)] border border-brand-red/20 border-b-0"
+                            style={{ height: visitas > 0 ? `calc(${porcentaje}% - 20px)` : '4px', minHeight: '4px' }}
+                          ></div>
+
+                          {/* Etiqueta del día */}
+                          <span className="text-[10px] font-black text-gray-400 mt-2 tracking-wider group-hover:text-brand-red transition-colors">
+                            {diaNombre.substring(0, 3).toUpperCase()}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </>
             )}
@@ -1575,6 +1983,59 @@ const Dueno = () => {
                         {guardandoGimnasio ? 'Guardando...' : 'Guardar Nombre'}
                       </button>
                     </form>
+                  </div>
+
+                  {/* Formulario Logo del Gimnasio */}
+                  <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4">
+                    <h2 className="text-xl font-bold border-b border-white/5 pb-2 uppercase tracking-wide text-brand-red text-sm">Logo del Gimnasio</h2>
+                    
+                    {/* Visualización del Logo actual */}
+                    <div className="flex flex-col items-center justify-center p-4 bg-white/5 border border-white/5 rounded-2xl">
+                      {logoUrl ? (
+                        <div className="relative group">
+                          <img 
+                            src={logoUrl} 
+                            alt="Logo Vista Previa" 
+                            className="w-24 h-24 rounded-full object-cover border-4 border-white/10 shadow-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={eliminarLogoGimnasio}
+                            disabled={subiendoLogo}
+                            className="absolute -top-1 -right-1 bg-brand-red hover:bg-brand-red/90 text-white rounded-full p-1.5 shadow-md transition duration-200 cursor-pointer"
+                            title="Eliminar Logo"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-24 h-24 rounded-full bg-brand-red/10 border border-brand-red/20 flex flex-col items-center justify-center text-center p-3 text-gray-400">
+                          <svg className="w-8 h-8 text-brand-red/60 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span className="text-[9px] uppercase font-bold tracking-wider">Sin Logo</span>
+                        </div>
+                      )}
+                      <span className="text-[9px] text-gray-500 mt-2">Formato PNG/JPG. Máx 2MB.</span>
+                    </div>
+
+                    {/* Selector y Botón de subida */}
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                        {subiendoLogo ? 'Actualizando logo...' : 'Seleccionar nueva imagen'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                          onChange={subirLogoGimnasio}
+                          disabled={subiendoLogo}
+                          className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2 text-xs text-white focus:outline-none transition-all duration-300 cursor-pointer file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-white/10 file:text-white file:cursor-pointer hover:file:bg-white/20"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Formulario Configurar Tarifas y Moneda */}

@@ -37,6 +37,7 @@ const Recepcion = () => {
   const { mostrarToast } = useToast();
   const [cargando, setCargando] = useState(true);
   const [nombreGimnasio, setNombreGimnasio] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
   
   // Datos de la base de datos
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -107,6 +108,7 @@ const Recepcion = () => {
 
       const datos = await respuesta.json();
       setNombreGimnasio(datos.nombre_gimnasio || 'GymPross');
+      setLogoUrl(datos.logo_url || '');
       setClientes(datos.clientes || []);
       setAsistenciasActivas(datos.asistencias_activas || []);
       setAsistenciasRecientes(datos.asistencias_recientes || []);
@@ -539,9 +541,13 @@ const Recepcion = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-white/10 pb-8">
           <div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-brand-red flex items-center justify-center font-black text-sm text-white">
-                GP
-              </div>
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo Gimnasio" className="w-8 h-8 rounded-full object-cover border border-white/25 shadow-[0_0_10px_rgba(255,255,255,0.1)]" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-brand-red flex items-center justify-center font-black text-sm text-white">
+                  GP
+                </div>
+              )}
               <span className="text-sm font-bold uppercase tracking-wider text-brand-red">Recepción Operativa</span>
             </div>
             <h1 className="text-4xl font-black mt-2">{nombreGimnasio || 'Cargando sucursal...'}</h1>
