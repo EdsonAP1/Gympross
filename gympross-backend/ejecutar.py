@@ -15,7 +15,10 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'clave_super_secreta_desarrol
 
 # Registro de controladores (Blueprints)
 from app.controladores.recepcion_controlador import recepcion_bp
+from app.controladores.superadmin_controlador import superadmin_bp
 app.register_blueprint(recepcion_bp, url_prefix='/api/recepcion')
+app.register_blueprint(superadmin_bp, url_prefix='/api/superadmin')
+
 
 @app.route('/')
 def inicio():

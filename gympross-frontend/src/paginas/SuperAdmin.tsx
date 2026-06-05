@@ -1,20 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createClient } from '@supabase/supabase-js';
 import { clienteSupabase } from '../supabaseClient';
 import { useToast } from '../contexto/ToastContext';
 
-const urlSupabase = import.meta.env.VITE_SUPABASE_URL || '';
-const claveAnonima = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-// Cliente auxiliar para registrar dueños sin cerrar la sesión del SuperAdmin
-const clienteRegistro = createClient(urlSupabase, claveAnonima, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false
-  }
-});
+const BACKEND_URL = 'http://localhost:5000';
 
 interface Gimnasio {
   id_gimnasio: string;
@@ -31,6 +20,7 @@ const SuperAdmin = () => {
   const { mostrarToast } = useToast();
   const [gimnasios, setGimnasios] = useState<Gimnasio[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [serviceKeyOk, setServiceKeyOk] = useState<boolean | null>(null);
 
   // Estados del Formulario de Registro
   const [nombreGimnasio, setNombreGimnasio] = useState('');
@@ -47,6 +37,11 @@ const SuperAdmin = () => {
   const [nuevoPin, setNuevoPin] = useState('');
   const [mensajePin, setMensajePin] = useState('');
 
+  const obtenerToken = async () => {
+    const { data: { session } } = await clienteSupabase.auth.getSession();
+    return session?.access_token || '';
+  };
+
   const obtenerPin = async () => {
     try {
       const { data, error } = await clienteSupabase
@@ -61,6 +56,21 @@ const SuperAdmin = () => {
       }
     } catch (err: any) {
       console.error("Error al obtener PIN de seguridad:", err.message);
+    }
+  };
+
+  const verificarServiceKey = async () => {
+    try {
+      const token = await obtenerToken();
+      const resp = await fetch(`${BACKEND_URL}/api/superadmin/gimnasio/verificar-service-key`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setServiceKeyOk(data.service_key_configurada);
+      }
+    } catch {
+      setServiceKeyOk(false);
     }
   };
 
@@ -104,6 +114,7 @@ const SuperAdmin = () => {
   useEffect(() => {
     obtenerPin();
     obtenerGimnasios();
+    verificarServiceKey();
   }, []);
 
   const cerrarSesion = async () => {
@@ -117,55 +128,39 @@ const SuperAdmin = () => {
     setMensajeForm({ tipo: '', texto: '' });
 
     try {
-      // 1. Crear el gimnasio
-      const nuevoIdGimnasio = crypto.randomUUID();
-      const fechaVencimiento = new Date();
-      fechaVencimiento.setMonth(fechaVencimiento.getMonth() + parseInt(duracionMeses));
-
-      const { error: errorGim } = await clienteSupabase
-        .from('gimnasios')
-        .insert({
-          id_gimnasio: nuevoIdGimnasio,
+      // Usar el nuevo endpoint seguro del backend que confirma el email automáticamente
+      const token = await obtenerToken();
+      
+      const resp = await fetch(`${BACKEND_URL}/api/superadmin/gimnasio/crear`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           nombre_gimnasio: nombreGimnasio,
-          estado_suscripcion: 'activo',
-          fecha_vencimiento: fechaVencimiento.toISOString()
-        });
-
-      if (errorGim) throw errorGim;
-
-      // 2. Registrar dueño en Auth
-      const { data: datosAuth, error: errorAuth } = await clienteRegistro.auth.signUp({
-        email: correoDueno,
-        password: contrasenaDueno
+          nombre_dueno: nombreDueno,
+          correo_dueno: correoDueno,
+          contrasena_dueno: contrasenaDueno,
+          duracion_meses: parseInt(duracionMeses)
+        })
       });
 
-      if (errorAuth) {
-        // Limpieza: si falla la creación del usuario, borrar el gimnasio creado
-        await clienteSupabase.from('gimnasios').delete().eq('id_gimnasio', nuevoIdGimnasio);
-        throw errorAuth;
+      const resultado = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(resultado.error || 'Error al crear el gimnasio');
       }
 
-      if (datosAuth.user) {
-        // 3. Crear perfil de usuarios_personal (Guardando contraseña en texto plano para visualización)
-        const { error: errorPerfil } = await clienteSupabase
-          .from('usuarios_personal')
-          .insert({
-            id_usuario: datosAuth.user.id,
-            id_gimnasio: nuevoIdGimnasio,
-            nombre_completo: nombreDueno,
-            correo_electronico: correoDueno,
-            rol_usuario: 'dueno',
-            contrasena_inicial: contrasenaDueno
-          });
+      const emailConfirmado = resultado.email_confirmado;
+      const mensajeExito = emailConfirmado
+        ? `Gimnasio "${nombreGimnasio}" y dueño registrados. El dueño puede iniciar sesion inmediatamente.`
+        : `Gimnasio creado. AVISO: El email "${correoDueno}" requiere confirmacion manual en Supabase Dashboard > Authentication > Users.`;
 
-        if (errorPerfil) {
-          // Limpieza
-          await clienteSupabase.from('gimnasios').delete().eq('id_gimnasio', nuevoIdGimnasio);
-          throw errorPerfil;
-        }
-      }
-
-      setMensajeForm({ tipo: 'exito', texto: 'Gimnasio y Dueño registrados correctamente.' });
+      setMensajeForm({ 
+        tipo: emailConfirmado ? 'exito' : 'advertencia', 
+        texto: mensajeExito 
+      });
       
       // Limpiar formulario
       setNombreGimnasio('');
@@ -176,7 +171,15 @@ const SuperAdmin = () => {
       // Refrescar lista
       obtenerGimnasios();
     } catch (err: any) {
-      setMensajeForm({ tipo: 'error', texto: err.message || 'Error al procesar el registro.' });
+      const msg = err.message || 'Error al procesar el registro.';
+      if (msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('limit') || msg.toLowerCase().includes('exceeded')) {
+        setMensajeForm({
+          tipo: 'error_explicado',
+          texto: msg
+        });
+      } else {
+        setMensajeForm({ tipo: 'error', texto: msg });
+      }
     } finally {
       setCreando(false);
     }
@@ -300,16 +303,54 @@ const SuperAdmin = () => {
             
             {/* Formulario de Registro */}
             <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl h-fit">
-              <h2 className="text-2xl font-bold mb-6 text-left border-b border-white/5 pb-3">Registrar Gimnasio</h2>
+              <h2 className="text-2xl font-bold mb-4 text-left border-b border-white/5 pb-3">Registrar Gimnasio</h2>
+
+              {/* Indicador de Service Key */}
+              {serviceKeyOk !== null && (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold mb-4 ${
+                  serviceKeyOk
+                    ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                    : 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400'
+                }`}>
+                  <span>{serviceKeyOk ? '✓' : '⚠'}</span>
+                  {serviceKeyOk
+                    ? 'Email auto-confirmado al crear dueños'
+                    : 'SERVICE_KEY no config — requiere confirmar email manualmente'}
+                </div>
+              )}
               
               {mensajeForm.texto && (
-                <div className={`p-4 rounded-2xl text-sm mb-6 text-center border ${
-                  mensajeForm.tipo === 'exito' 
-                    ? 'bg-green-500/10 border-green-500/20 text-green-400' 
-                    : 'bg-brand-red/10 border-brand-red/20 text-brand-red'
-                }`}>
-                  {mensajeForm.texto}
-                </div>
+                mensajeForm.tipo === 'error_explicado' ? (
+                  <div className="p-5 rounded-2xl text-sm mb-6 border bg-yellow-500/10 border-yellow-500/30 text-yellow-400 space-y-3">
+                    <div className="font-bold text-base flex items-center gap-2">
+                      <span>⚠️</span> Límite de Registro de Supabase Detectado
+                    </div>
+                    <p className="text-xs text-gray-300 leading-relaxed">
+                      El servidor de Supabase ha rechazado el registro debido a las políticas de Rate Limit por IP del plan gratuito.
+                    </p>
+                    <div className="border-t border-white/10 pt-3 space-y-2">
+                      <div className="font-semibold text-xs text-white">CÓMO SOLUCIONARLO:</div>
+                      <ol className="list-decimal pl-4 text-xs text-gray-300 space-y-1.5 text-left">
+                        <li>
+                          <strong>Recomendado (Sin límites y auto-confirmación):</strong> Ve a tu <strong>Supabase Dashboard &gt; Project Settings &gt; API</strong>, copia la clave <code>service_role</code> y pégala en <code>SUPABASE_SERVICE_KEY</code> dentro de <code>gympross-backend/.env</code>.
+                        </li>
+                        <li>
+                          <strong>Desactivar Rate Limits:</strong> Ve a tu <strong>Supabase Dashboard &gt; Project Settings &gt; Auth</strong>, busca <strong>Rate Limits</strong> y aumenta o desactiva el límite de registros.
+                        </li>
+                      </ol>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={`p-4 rounded-2xl text-sm mb-6 text-center border ${
+                    mensajeForm.tipo === 'exito'
+                      ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                      : mensajeForm.tipo === 'advertencia'
+                      ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
+                      : 'bg-brand-red/10 border-brand-red/20 text-brand-red'
+                  }`}>
+                    {mensajeForm.texto}
+                  </div>
+                )
               )}
 
               <form onSubmit={registrarGimnasio} className="space-y-5 text-left">
