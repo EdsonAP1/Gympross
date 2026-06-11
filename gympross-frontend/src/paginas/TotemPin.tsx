@@ -64,6 +64,14 @@ const TotemPin = () => {
         }
       });
 
+      if (respuesta.status === 403) {
+        const errorData = await respuesta.json().catch(() => ({}));
+        if (errorData.error && errorData.error.toLowerCase().includes("suscripción")) {
+          navegar('/suspendido');
+          return;
+        }
+      }
+
       if (respuesta.ok) {
         const datos = await respuesta.json();
         

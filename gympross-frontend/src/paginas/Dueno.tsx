@@ -169,6 +169,14 @@ const Dueno = () => {
 
       if (errorGim) throw errorGim;
       if (gimnasioInfo) {
+        const expirado = gimnasioInfo.fecha_vencimiento
+          ? new Date() > new Date(gimnasioInfo.fecha_vencimiento)
+          : false;
+        if (gimnasioInfo.estado_suscripcion === 'suspendido' || expirado) {
+          navegar('/suspendido');
+          return;
+        }
+
         setNombreGimnasio(gimnasioInfo.nombre_gimnasio);
         setLogoUrl(gimnasioInfo.logo_url || '');
         setContrasenaDueno(gimnasioInfo.contrasena_dueno || 'password123');

@@ -23,6 +23,33 @@ const PortalSeleccion = () => {
         return;
       }
 
+      const { data: { user } } = await clienteSupabase.auth.getUser();
+      if (user) {
+        // Verificar suscripción del gimnasio antes de cargar el portal
+        const { data: usuarioInfo } = await clienteSupabase
+          .from('usuarios_personal')
+          .select('id_gimnasio')
+          .eq('id_usuario', user.id)
+          .maybeSingle();
+
+        if (usuarioInfo) {
+          const { data: gimnasioInfo } = await clienteSupabase
+            .from('gimnasios')
+            .select('estado_suscripcion, fecha_vencimiento')
+            .eq('id_gimnasio', usuarioInfo.id_gimnasio)
+            .maybeSingle();
+
+          if (gimnasioInfo) {
+            const vencimiento = gimnasioInfo.fecha_vencimiento;
+            const expirado = vencimiento ? new Date() > new Date(vencimiento) : false;
+            if (gimnasioInfo.estado_suscripcion === 'suspendido' || expirado) {
+              navegar('/suspendido');
+              return;
+            }
+          }
+        }
+      }
+
       // Obtener contraseñas del gimnasio desde el endpoint consolidado
       const res = await fetch(`${BACKEND_URL}/api/recepcion/dashboard/datos`, {
         headers: {

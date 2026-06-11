@@ -97,13 +97,20 @@ const Recepcion = () => {
       }
       
 
-
       // Llamar al endpoint consolidado del backend
       const respuesta = await fetch(`${BACKEND_URL}/api/recepcion/dashboard/datos`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
+
+      if (respuesta.status === 403) {
+        const errorData = await respuesta.json().catch(() => ({}));
+        if (errorData.error && errorData.error.toLowerCase().includes("suscripción")) {
+          navegar('/suspendido');
+          return;
+        }
+      }
 
       if (!respuesta.ok) throw new Error("Error al obtener datos del servidor");
 

@@ -36,6 +36,13 @@ const SuperAdmin = () => {
   const [nuevoPin, setNuevoPin] = useState('');
   const [mensajePin, setMensajePin] = useState('');
 
+  // Estados de Configuración del Desarrollador (Soporte)
+  const [devWhatsappLink, setDevWhatsappLink] = useState('https://api.whatsapp.com/qr/JDXS7KRAPDO7D1?autoload=1&app_absent=0');
+  const [devWhatsappNumber, setDevWhatsappNumber] = useState('73084452');
+  const [devWhatsappQr, setDevWhatsappQr] = useState('');
+  const [subiendoQr, setSubiendoQr] = useState(false);
+  const [mensajeDev, setMensajeDev] = useState('');
+
   const obtenerToken = async () => {
     const { data: { session } } = await clienteSupabase.auth.getSession();
     return session?.access_token || '';
@@ -114,6 +121,7 @@ const SuperAdmin = () => {
     obtenerPin();
     obtenerGimnasios();
     verificarServiceKey();
+    obtenerConfiguracionesDev();
   }, []);
 
   const cerrarSesion = async () => {
@@ -265,6 +273,102 @@ const SuperAdmin = () => {
       setMensajePin('Contraseña de seguridad actualizada correctamente.');
     } catch (err: any) {
       setMensajePin('Error al actualizar: ' + err.message);
+    }
+  };
+
+  const obtenerConfiguracionesDev = async () => {
+    try {
+      const { data, error } = await clienteSupabase
+        .from('configuraciones_globales')
+        .select('clave, valor')
+        .in('clave', ['dev_whatsapp_link', 'dev_whatsapp_number', 'dev_whatsapp_qr']);
+
+      if (error) throw error;
+      if (data) {
+        data.forEach((c) => {
+          if (c.clave === 'dev_whatsapp_link' && c.valor) setDevWhatsappLink(c.valor);
+          if (c.clave === 'dev_whatsapp_number' && c.valor) setDevWhatsappNumber(c.valor);
+          if (c.clave === 'dev_whatsapp_qr' && c.valor) setDevWhatsappQr(c.valor);
+        });
+      }
+    } catch (err: any) {
+      console.error("Error al obtener config dev:", err.message);
+    }
+  };
+
+  const actualizarConfiguracionesDev = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMensajeDev('');
+    try {
+      const { error: errLink } = await clienteSupabase
+        .from('configuraciones_globales')
+        .upsert({ clave: 'dev_whatsapp_link', valor: devWhatsappLink });
+
+      const { error: errNumber } = await clienteSupabase
+        .from('configuraciones_globales')
+        .upsert({ clave: 'dev_whatsapp_number', valor: devWhatsappNumber });
+
+      if (errLink || errNumber) throw errLink || errNumber;
+      setMensajeDev('Configuración de soporte guardada con éxito.');
+    } catch (err: any) {
+      setMensajeDev('Error al guardar: ' + err.message);
+    }
+  };
+
+  const subirQrDesarrollador = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    const formatosValidos = ['png', 'jpg', 'jpeg'];
+    if (!formatosValidos.includes(extension) || !file.type.startsWith('image/')) {
+      mostrarToast("Selecciona una imagen en formato PNG o JPG.", "error");
+      return;
+    }
+
+    setSubiendoQr(true);
+    try {
+      const filePath = `global/whatsapp_qr.${extension}`;
+      
+      const { error: uploadError } = await clienteSupabase.storage
+        .from('gimnasios-logos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = clienteSupabase.storage
+        .from('gimnasios-logos')
+        .getPublicUrl(filePath);
+
+      const finalUrl = `${publicUrl}?t=${Date.now()}`;
+
+      const { error: dbError } = await clienteSupabase
+        .from('configuraciones_globales')
+        .upsert({ clave: 'dev_whatsapp_qr', valor: finalUrl });
+
+      if (dbError) throw dbError;
+
+      setDevWhatsappQr(finalUrl);
+      mostrarToast("Código QR de soporte actualizado.", "exito");
+    } catch (err: any) {
+      mostrarToast("Error al subir QR: " + err.message, "error");
+    } finally {
+      setSubiendoQr(false);
+    }
+  };
+
+  const actualizarFechaVencimiento = async (idGimnasio: string, fechaIso: string) => {
+    try {
+      const { error } = await clienteSupabase
+        .from('gimnasios')
+        .update({ fecha_vencimiento: fechaIso })
+        .eq('id_gimnasio', idGimnasio);
+
+      if (error) throw error;
+      mostrarToast("Fecha de vencimiento actualizada correctamente.", "exito");
+      obtenerGimnasios();
+    } catch (err: any) {
+      mostrarToast("Error al actualizar vencimiento: " + err.message, "error");
     }
   };
 
@@ -458,6 +562,86 @@ const SuperAdmin = () => {
               </form>
             </div>
 
+            {/* Configuración de Soporte del Desarrollador */}
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl h-fit text-left space-y-4">
+              <h2 className="text-xl font-bold mb-2 border-b border-white/5 pb-2">Soporte del Desarrollador</h2>
+              
+              {mensajeDev && (
+                <div className="p-3 bg-white/5 border border-white/10 text-xs rounded-xl mb-4 text-center">
+                  {mensajeDev}
+                </div>
+              )}
+
+              <form onSubmit={actualizarConfiguracionesDev} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                    Número de WhatsApp
+                  </label>
+                  <input
+                    type="text"
+                    value={devWhatsappNumber}
+                    onChange={(e) => setDevWhatsappNumber(e.target.value)}
+                    required
+                    className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2 text-sm text-white focus:outline-none transition-all duration-300 font-mono"
+                    placeholder="Ej. 73084452"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                    Enlace de WhatsApp
+                  </label>
+                  <input
+                    type="text"
+                    value={devWhatsappLink}
+                    onChange={(e) => setDevWhatsappLink(e.target.value)}
+                    required
+                    className="w-full bg-white/5 border border-white/10 focus:border-brand-red rounded-xl px-4 py-2 text-sm text-white focus:outline-none transition-all duration-300 font-mono"
+                    placeholder="Ej. https://api.whatsapp.com/qr/..."
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-brand-red hover:bg-brand-red/90 text-white py-2 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer text-center"
+                >
+                  Guardar Datos de Soporte
+                </button>
+              </form>
+
+              <div className="border-t border-white/10 pt-4 space-y-3">
+                <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  Código QR de WhatsApp
+                </label>
+                
+                {devWhatsappQr ? (
+                  <div className="flex items-center gap-3">
+                    <img src={devWhatsappQr} alt="QR Soporte" className="w-14 h-14 object-contain rounded-lg bg-white p-1" />
+                    <span className="text-[10px] text-green-400 font-semibold">✓ QR Cargado</span>
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-gray-500 italic">No se ha subido un código QR personalizado. (Se autogenerará usando el enlace de arriba).</div>
+                )}
+
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={subirQrDesarrollador}
+                    disabled={subiendoQr}
+                    className="hidden"
+                    id="dev-qr-uploader"
+                  />
+                  <label
+                    htmlFor="dev-qr-uploader"
+                    className="w-full block border border-dashed border-white/20 hover:border-brand-red text-center py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition duration-300 bg-white/[0.02] hover:bg-brand-red/5"
+                  >
+                    {subiendoQr ? 'Subiendo imagen...' : 'Subir Imagen de Código QR'}
+                  </label>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           {/* Columna Derecha - Listado de Gimnasios */}
@@ -504,12 +688,27 @@ const SuperAdmin = () => {
                               {expirado ? 'vencido' : gim.estado_suscripcion}
                             </span>
                           </td>
-                          <td className="py-4 font-mono text-xs">
-                            {fechaObj.toLocaleDateString('es-ES', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric'
-                            })}
+                          <td className="py-4 space-y-1">
+                            <div className="font-mono text-xs font-semibold">
+                              {fechaObj.toLocaleDateString('es-ES', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </div>
+                            <input
+                              type="datetime-local"
+                              value={gim.fecha_vencimiento ? new Date(new Date(gim.fecha_vencimiento).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}
+                              onChange={async (e) => {
+                                const val = e.target.value;
+                                if (val) {
+                                  await actualizarFechaVencimiento(gim.id_gimnasio, new Date(val).toISOString());
+                                }
+                              }}
+                              className="bg-white/5 border border-white/10 rounded-lg p-1 text-[10px] text-white focus:outline-none focus:border-brand-red font-mono cursor-pointer w-full max-w-[140px]"
+                            />
                           </td>
                           <td className="py-4 text-right space-y-2 md:space-y-0 md:space-x-2">
                             <button
