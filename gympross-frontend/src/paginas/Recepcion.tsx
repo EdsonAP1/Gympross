@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clienteSupabase } from '../supabaseClient';
 import { useToast } from '../contexto/ToastContext';
+import { BACKEND_URL } from '../config';
 
 interface Cliente {
   id_cliente: string;
@@ -98,7 +99,7 @@ const Recepcion = () => {
 
 
       // Llamar al endpoint consolidado del backend
-      const respuesta = await fetch('http://localhost:5000/api/recepcion/dashboard/datos', {
+      const respuesta = await fetch(`${BACKEND_URL}/api/recepcion/dashboard/datos`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -233,7 +234,7 @@ const Recepcion = () => {
     try {
       const token = await obtenerToken();
       const nuevaCantidad = cantidadCasilleros + 1;
-      const res = await fetch('http://localhost:5000/api/recepcion/gimnasio/actualizar-casilleros', {
+      const res = await fetch(`${BACKEND_URL}/api/recepcion/gimnasio/actualizar-casilleros`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -258,7 +259,7 @@ const Recepcion = () => {
     try {
       const token = await obtenerToken();
       const nuevaCantidad = cantidadCasilleros - 1;
-      const res = await fetch('http://localhost:5000/api/recepcion/gimnasio/actualizar-casilleros', {
+      const res = await fetch(`${BACKEND_URL}/api/recepcion/gimnasio/actualizar-casilleros`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -288,7 +289,7 @@ const Recepcion = () => {
 
     try {
       const token = await obtenerToken();
-      const res = await fetch('http://localhost:5000/api/recepcion/totem/marcar-asistencia', {
+      const res = await fetch(`${BACKEND_URL}/api/recepcion/totem/marcar-asistencia`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -324,7 +325,7 @@ const Recepcion = () => {
   const asignarCasillero = async (idAsistencia: string, numLlave: number) => {
     try {
       const token = await obtenerToken();
-      const res = await fetch('http://localhost:5000/api/recepcion/casilleros/asignar', {
+      const res = await fetch(`${BACKEND_URL}/api/recepcion/casilleros/asignar`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -346,7 +347,7 @@ const Recepcion = () => {
   const liberarCasillero = async (idAsistencia: string) => {
     try {
       const token = await obtenerToken();
-      const res = await fetch('http://localhost:5000/api/recepcion/casilleros/liberar', {
+      const res = await fetch(`${BACKEND_URL}/api/recepcion/casilleros/liberar`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -369,7 +370,7 @@ const Recepcion = () => {
     setMensajeOperacion('');
     try {
       const token = await obtenerToken();
-      const res = await fetch('http://localhost:5000/api/recepcion/clientes/crear', {
+      const res = await fetch(`${BACKEND_URL}/api/recepcion/clientes/crear`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -402,7 +403,7 @@ const Recepcion = () => {
     try {
       const token = await obtenerToken();
       if (token) {
-        const respuesta = await fetch('http://localhost:5000/api/recepcion/dashboard/datos', {
+        const respuesta = await fetch(`${BACKEND_URL}/api/recepcion/dashboard/datos`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -464,7 +465,7 @@ const Recepcion = () => {
 
     try {
       const token = await obtenerToken();
-      const res = await fetch('http://localhost:5000/api/recepcion/clientes/registrar-pago', {
+      const res = await fetch(`${BACKEND_URL}/api/recepcion/clientes/registrar-pago`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -499,7 +500,7 @@ const Recepcion = () => {
 
     try {
       const token = await obtenerToken();
-      const res = await fetch('http://localhost:5000/api/recepcion/personal/marcar-asistencia', {
+      const res = await fetch(`${BACKEND_URL}/api/recepcion/personal/marcar-asistencia`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

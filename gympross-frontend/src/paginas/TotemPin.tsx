@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clienteSupabase } from '../supabaseClient';
+import { BACKEND_URL } from '../config';
 
 type EstadoTotem = 'esperando' | 'procesando' | 'exito' | 'error';
 
@@ -57,7 +58,7 @@ const TotemPin = () => {
       const token = session?.access_token || '';
       if (!token) return;
 
-      const respuesta = await fetch('http://localhost:5000/api/recepcion/dashboard/datos', {
+      const respuesta = await fetch(`${BACKEND_URL}/api/recepcion/dashboard/datos`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -117,7 +118,7 @@ const TotemPin = () => {
 
       const cuerpo = { pin_acceso: pinAEnviar };
 
-      const respuesta = await fetch('http://localhost:5000/api/recepcion/totem/marcar-asistencia', {
+      const respuesta = await fetch(`${BACKEND_URL}/api/recepcion/totem/marcar-asistencia`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

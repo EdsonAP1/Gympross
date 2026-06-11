@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clienteSupabase } from '../supabaseClient';
+import { BACKEND_URL } from '../config';
 
 const PortalSeleccion = () => {
   const navegar = useNavigate();
@@ -23,7 +24,7 @@ const PortalSeleccion = () => {
       }
 
       // Obtener contraseñas del gimnasio desde el endpoint consolidado
-      const res = await fetch('http://localhost:5000/api/recepcion/dashboard/datos', {
+      const res = await fetch(`${BACKEND_URL}/api/recepcion/dashboard/datos`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

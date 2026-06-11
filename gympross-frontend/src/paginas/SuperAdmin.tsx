@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clienteSupabase } from '../supabaseClient';
 import { useToast } from '../contexto/ToastContext';
-
-const BACKEND_URL = 'http://localhost:5000';
+import { BACKEND_URL } from '../config';
 
 interface Gimnasio {
   id_gimnasio: string;

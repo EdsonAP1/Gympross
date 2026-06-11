@@ -4,6 +4,7 @@ import { clienteSupabase } from '../supabaseClient';
 import { useToast } from '../contexto/ToastContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { BACKEND_URL } from '../config';
 
 interface Personal {
   id_usuario: string;
@@ -311,7 +312,7 @@ const Dueno = () => {
       // 6. Obtener reporte de caja del día y reporte financiero por rango
       const token = (await clienteSupabase.auth.getSession()).data.session?.access_token || '';
       if (token) {
-        const resReporte = await fetch('http://localhost:5000/api/recepcion/gimnasio/reporte-caja', {
+        const resReporte = await fetch(`${BACKEND_URL}/api/recepcion/gimnasio/reporte-caja`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -328,7 +329,7 @@ const Dueno = () => {
           fecha_inicio: fechaInicioFiltro,
           fecha_fin: fechaFinFiltro
         });
-        const resFinanciero = await fetch(`http://localhost:5000/api/recepcion/gimnasio/reporte-financiero?${queryParams}`, {
+        const resFinanciero = await fetch(`${BACKEND_URL}/api/recepcion/gimnasio/reporte-financiero?${queryParams}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -380,7 +381,7 @@ const Dueno = () => {
           fecha_inicio: fechaInicioFiltro,
           fecha_fin: fechaFinFiltro
         });
-        const res = await fetch(`http://localhost:5000/api/recepcion/gimnasio/reporte-financiero?${queryParams}`, {
+        const res = await fetch(`${BACKEND_URL}/api/recepcion/gimnasio/reporte-financiero?${queryParams}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
