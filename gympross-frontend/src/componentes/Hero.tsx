@@ -17,7 +17,7 @@ const Hero = () => {
         <div className="flex flex-wrap items-center gap-6 mb-12">
           {/* Enlace de WhatsApp para Adquirir Software */}
           <a 
-            href="https://wa.me/59170000000?text=Hola%20GymPross%2C%20estoy%20interesado%20en%20adquirir%20el%20software%20de%20gesti%C3%B3n%20para%20mi%20gimnasio."
+            href="https://api.whatsapp.com/qr/JDXS7KRAPDO7D1?autoload=1&app_absent=0"
             target="_blank" 
             rel="noopener noreferrer"
             className="border border-white/30 bg-transparent hover:bg-white/5 text-white px-8 py-3 rounded-full font-semibold transition-all duration-300 hover:border-brand-red hover:text-brand-red cursor-pointer text-center"
