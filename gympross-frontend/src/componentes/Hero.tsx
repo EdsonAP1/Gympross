@@ -35,54 +35,44 @@ const Hero = () => {
           </button>
         </div>
 
-        {/* Componentes Flotantes del Hero - Altura corregida para evitar colisiones */}
-        <div className="relative mt-8 md:mt-4 h-[280px] w-full max-w-[500px]">
+        {/* Componentes de Estadísticas y Confianza */}
+        <div className="flex flex-col sm:flex-row gap-6 mt-10 w-full max-w-xl relative z-20">
           
           {/* Tarjeta de Reseñas */}
-          <div className="absolute top-0 left-0 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-4 flex flex-col gap-2 w-56 z-20 shadow-2xl transition-all duration-500 hover:-translate-y-1 hover:border-white/20">
-            <div className="flex -space-x-3">
-              <img src="/profile_1.png" alt="Perfil Usuario" className="w-10 h-10 rounded-full border-2 border-black object-cover" />
-              <img src="/profile_2.png" alt="Perfil Usuario" className="w-10 h-10 rounded-full border-2 border-black object-cover" />
-              <div className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center font-extrabold border-2 border-black text-xs z-10">+4</div>
+          <div className="flex-1 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 flex items-center gap-4 shadow-2xl transition-all duration-500 hover:-translate-y-1 hover:border-white/20 hover:bg-white/10">
+            <div className="flex -space-x-3 flex-shrink-0">
+              <img src="/profile_1.png" alt="Perfil Usuario" className="w-9 h-9 rounded-full border-2 border-zinc-950 object-cover" />
+              <img src="/profile_2.png" alt="Perfil Usuario" className="w-9 h-9 rounded-full border-2 border-zinc-950 object-cover" />
+              <div className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center font-extrabold border-2 border-zinc-950 text-[10px] z-10">+4</div>
             </div>
             <div className="text-left">
               <p className="font-bold text-sm text-white">20k+ Reseñas</p>
               <div className="flex text-yellow-500 gap-0.5 mt-1">
-                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
+                {[...Array(5)].map((_, i) => (
+                  <svg key={i} className="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Icono Decorativo Flotante */}
-          <div className="absolute top-6 left-60 bg-white/5 backdrop-blur-md border border-white/10 rounded-full p-3 flex items-center justify-center animate-bounce duration-1000 shadow-lg z-20">
-            <svg className="w-6 h-6 text-brand-red" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L14.39 9.61L22 12L14.39 14.39L12 22L9.61 14.39L2 12L9.61 9.61L12 2Z" />
-            </svg>
-          </div>
-
-          {/* Tarjeta Roja Inferior - Estadísticas (Desplazada hacia abajo y derecha para evitar colisiones) */}
-          <div className="absolute top-28 left-28 md:left-36 bg-brand-red rounded-3xl p-5 w-72 flex flex-col z-10 overflow-hidden shadow-[0_10px_30px_rgba(229,57,53,0.3)] transition-all duration-500 hover:-translate-y-1">
-            <div className="absolute top-4 right-4 border border-white/30 p-2 rounded-lg bg-black/20">
-              <svg className="w-5 h-5 text-white transform -rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
-              </svg>
+          {/* Tarjeta de Clientes Registrados */}
+          <div className="flex-1 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 flex flex-col justify-between shadow-2xl transition-all duration-500 hover:-translate-y-1 hover:border-brand-red/30 hover:bg-white/10 relative overflow-hidden group">
+            {/* Resplandor rojo sutil al hacer hover */}
+            <div className="absolute -right-10 -bottom-10 w-24 h-24 bg-brand-red/5 rounded-full blur-2xl group-hover:bg-brand-red/15 transition-all duration-500 pointer-events-none"></div>
+            
+            <div className="flex justify-between items-start w-full">
+              <div className="text-left">
+                <h2 className="text-2xl font-black text-brand-red tracking-tight">25K+</h2>
+                <p className="text-xs text-gray-400 font-medium mt-1 leading-snug">Accesos de Clientes<br/>Registrados</p>
+              </div>
+              <div className="border border-white/10 p-2 rounded-xl bg-white/[0.02] group-hover:border-brand-red/30 group-hover:bg-brand-red/5 transition-all duration-500 flex-shrink-0">
+                <svg className="w-4 h-4 text-gray-400 group-hover:text-brand-red transform -rotate-45 transition-colors duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                </svg>
+              </div>
             </div>
-            <h2 className="text-3xl font-black mb-1 text-white text-left">25K+</h2>
-            <p className="text-xs font-semibold text-white text-left">Accesos de Clientes<br/>Registrados</p>
           </div>
 
         </div>
